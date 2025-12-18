@@ -191,4 +191,17 @@ Refer to the [official post-setup documentation](https://www.linkace.org/docs/v2
 - **Web Server**: Nginx with Valet v2.4.4
 - **Composer**: 2.9.2
 
+## Automation Scripts
+
+Two convenience scripts are included:
+
+- **`build-production.sh`**: Prepares and creates a production zip
+- **`switch-to-dev.sh`**: Switches back to development mode
+
+Usage:
+```bash
+./build-production.sh    # Create production build
+./switch-to-dev.sh       # Switch to development
+```
+
 This setup was successfully tested and LinkAce is running at `http://linkace.test`.
