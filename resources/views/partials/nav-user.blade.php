@@ -30,6 +30,13 @@
             <a href="{{ route('get-export') }}" class="dropdown-item">
                 @lang('export.export')
             </a>
+            <div class="dropdown-divider"></div>
+            <a href="{{ route('ai-tagging.index') }}#ai-tag-export" class="dropdown-item">
+                AI Tag Export
+            </a>
+            <a href="{{ route('ai-tagging.index') }}#ai-tag-import" class="dropdown-item">
+                AI Tag Import
+            </a>
             @role(\App\Enums\Role::ADMIN)
                 <div class="dropdown-divider"></div>
                 <a href="{{ route('get-systemsettings') }}" class="dropdown-item">

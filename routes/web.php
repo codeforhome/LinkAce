@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\AuditController;
 use App\Http\Controllers\Admin\SystemSettingsController;
 use App\Http\Controllers\Admin\UserManagementController;
 use App\Http\Controllers\App\ApiTokenController;
+use App\Http\Controllers\App\AITaggingController;
 use App\Http\Controllers\App\BookmarkletController;
 use App\Http\Controllers\App\DashboardController;
 use App\Http\Controllers\App\ExportController;
@@ -90,6 +91,11 @@ Route::group(['middleware' => 'auth:sanctum'], function () {
 Route::group(['middleware' => ['auth']], function () {
     Route::get('dashboard', [DashboardController::class, 'index'])
         ->name('dashboard');
+
+    Route::get('ai-tagging', [AITaggingController::class, 'index'])->name('ai-tagging.index');
+    Route::post('ai-tagging/export', [AITaggingController::class, 'export'])->name('ai-tagging.export');
+    Route::post('ai-tagging/import', [AITaggingController::class, 'import'])->name('ai-tagging.import');
+    Route::post('ai-tagging/apply', [AITaggingController::class, 'apply'])->name('ai-tagging.apply');
 
     Route::resource('links', LinkController::class)->where(['link' => '[0-9]+']);
     Route::resource('lists', ListController::class)->where(['list' => '[0-9]+']);
