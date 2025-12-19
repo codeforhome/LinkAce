@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Helper\HtmlMeta;
 use App\Helper\UpdateHelper;
 use App\Models\Link;
 use App\Models\LinkList;
@@ -119,5 +120,20 @@ class FetchController extends Controller
         }
 
         return response()->json(['keywords' => null]);
+    }
+
+    public function metaFromUrl(Request $request): JsonResponse
+    {
+        $request->validate([
+            'url' => ['required', 'url', new NoPrivateIpRule],
+        ]);
+
+        $meta = (new HtmlMeta())->getFromUrl($request->input('url'));
+
+        return response()->json([
+            'success' => $meta['success'],
+            'title' => $meta['title'],
+            'description' => $meta['description'],
+        ]);
     }
 }

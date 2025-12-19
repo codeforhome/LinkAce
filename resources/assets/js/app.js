@@ -6,6 +6,7 @@ import BulkEdit from './components/BulkEdit';
 import DatabaseSetup from './components/Setup';
 import GenerateCronToken from './components/GenerateCronToken';
 import Import from './components/Import';
+import LinkMetaFetch from './components/LinkMetaFetch';
 import LoadingButton from './components/LoadingButton';
 import OpenLinksInTabs from './components/OpenLinksInTabs';
 import ShareToggleAll from './components/ShareToggleAll';
@@ -22,6 +23,7 @@ function registerViews () {
   register('.database-setup', DatabaseSetup);
   register('.cron-token', GenerateCronToken);
   register('.import-form', Import);
+  register('.link-meta-fetch', LinkMetaFetch);
   register('.share-toggle', ShareToggleAll);
   register('.simple-select', SimpleSelect);
   register('.tag-select', TagsSelect);

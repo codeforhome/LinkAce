@@ -44,7 +44,22 @@
                     <div class="col-12 col-sm-6 col-md-7">
 
                         <div class="mb-4">
-                            <label class="form-label" for="title">@lang('link.title')</label>
+                            <div class="d-flex align-items-center justify-content-between mb-1">
+                                <label class="form-label mb-0" for="title">@lang('link.title')</label>
+                                <button type="button" class="btn btn-xs btn-outline-secondary link-meta-fetch"
+                                    data-url-target="#url"
+                                    data-title-target="#title"
+                                    data-description-target="#description"
+                                    data-status-target="#link-meta-status"
+                                    data-loading-text="@lang('link.fetch_meta_loading')"
+                                    data-loading-label="@lang('link.fetch_meta_loading')"
+                                    data-success-text="@lang('link.fetch_meta_success')"
+                                    data-error-text="@lang('link.fetch_meta_error')"
+                                    data-missing-url-text="@lang('link.fetch_meta_missing_url')">
+                                    @lang('link.fetch_meta')
+                                </button>
+                            </div>
+                            <div id="link-meta-status" class="form-text d-none"></div>
                             <input name="title" id="title"
                                 class="form-control{{ $errors->has('title') ? ' is-invalid' : '' }}"
                                 type="text" placeholder="@lang('placeholder.link_url')"

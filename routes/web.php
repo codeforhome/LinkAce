@@ -166,6 +166,8 @@ Route::group(['middleware' => ['auth']], function () {
         ->name('fetch-existing-links');
     Route::post('fetch/keywords-for-url', [FetchController::class, 'htmlKeywordsFromUrl'])
         ->name('fetch-keywords-for-url');
+    Route::post('fetch/meta-for-url', [FetchController::class, 'metaFromUrl'])
+        ->name('fetch-meta-for-url');
     Route::get('fetch/update-check', [FetchController::class, 'checkForUpdates'])
         ->name('fetch-update-check');
 });

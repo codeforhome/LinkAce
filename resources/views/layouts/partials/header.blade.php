@@ -23,6 +23,7 @@
             'searchTags' => route('fetch-tags'),
             'existingLinks' => route('fetch-existing-links'),
             'keywordsForUrl' => route('fetch-keywords-for-url'),
+            'metaForUrl' => route('fetch-meta-for-url'),
             'updateCheck' => route('fetch-update-check'),
             'generateCronToken' => route('generate-cron-token'),
         ]
