@@ -33,7 +33,12 @@ class HtmlMeta
         $this->buildFallback();
 
         try {
-            $this->meta = \Kovah\HtmlMeta\Facades\HtmlMeta::forUrl($url)->getMeta();
+            // For Twitter/X URLs, try with browser headers to bypass login wall
+            if ($this->isTwitterUrl($url)) {
+                $this->meta = $this->getMetaFromMicrolink($url) ?? $this->getMetaWithBrowserHeaders($url);
+            } else {
+                $this->meta = \Kovah\HtmlMeta\Facades\HtmlMeta::forUrl($url)->getMeta();
+            }
         } catch (InvalidUrlException $e) {
             Log::warning($url . ': ' . $e->getMessage());
             if ($flashAlerts) {
@@ -85,15 +90,34 @@ class HtmlMeta
      */
     protected function getThumbnail(): ?string
     {
-        $thumbnail = $this->meta['og:image']
-            ?? $this->meta['twitter:image']
-            ?? null;
+        // For Twitter/X domains, prioritize twitter:image over og:image for better results
+        if ($this->isTwitterUrl($this->url)) {
+            $thumbnail = $this->meta['twitter:image'] ?? $this->meta['og:image'] ?? null;
+        } else {
+            $thumbnail = $this->meta['og:image'] ?? $this->meta['twitter:image'] ?? null;
+        }
 
         if (!is_null($thumbnail) && parse_url($thumbnail, PHP_URL_HOST) === null) {
             // If the thumbnail does not contain the domain, add it in front of it
             $urlInfo = parse_url($this->url);
             $baseUrl = sprintf('%s://%s/', $urlInfo['scheme'], $urlInfo['host']);
             $thumbnail = $baseUrl . trim($thumbnail, '/');
+        }
+
+        /*
+         * Special handling for Twitter/X: If no meta thumbnail found, provide fallback
+         * Twitter requires JavaScript execution to populate meta tags
+         */
+        if (is_null($thumbnail) && $this->isTwitterUrl($this->url)) {
+            // For Twitter profiles, try to construct avatar URL (not reliable)
+            if (preg_match('/(?:twitter\.com|x\.com)\/([a-zA-Z0-9_]+)/', $this->url, $matches)) {
+                $username = $matches[1];
+                // This is a fallback - Twitter avatars are at pbs.twimg.com/profile_images/
+                // But we don't have the specific image filename
+                Log::info('Twitter/X thumbnail not available - requires JavaScript execution: ' . $this->url);
+            } else {
+                Log::info('Twitter/X thumbnail not available due to authentication/JS requirements: ' . $this->url);
+            }
         }
 
         /*
@@ -114,5 +138,127 @@ class HtmlMeta
         }
 
         return $thumbnail;
+    }
+
+    /**
+     * Get meta data for Twitter/X URLs using browser headers to bypass login wall
+     */
+    protected function getMetaWithBrowserHeaders(string $url): array
+    {
+        $client = new \GuzzleHttp\Client([
+            'headers' => [
+                'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language' => 'en-US,en;q=0.5',
+                'Accept-Encoding' => 'gzip, deflate',
+                'Connection' => 'keep-alive',
+                'Upgrade-Insecure-Requests' => '1',
+            ],
+            'timeout' => 10,
+        ]);
+
+        try {
+            $response = $client->get($url);
+            $html = $response->getBody()->getContents();
+
+            // Parse meta tags manually
+            $meta = [];
+            if (preg_match_all('/<meta[^>]+property=["\']([^"\']+)["\'][^>]+content=["\']([^"\']+)["\'][^>]*>/i', $html, $matches)) {
+                foreach ($matches[1] as $index => $property) {
+                    $meta[$property] = $matches[2][$index];
+                }
+            }
+
+            // Also check name attributes
+            if (preg_match_all('/<meta[^>]+name=["\']([^"\']+)["\'][^>]+content=["\']([^"\']+)["\'][^>]*>/i', $html, $matches)) {
+                foreach ($matches[1] as $index => $name) {
+                    $meta[$name] = $matches[2][$index];
+                }
+            }
+
+            // For Twitter/X, if we don't have meta data, try to extract from HTML content
+            if (empty($meta['og:title']) && empty($meta['title'])) {
+                // Try to extract username from URL
+                if (preg_match('/(?:twitter\.com|x\.com)\/([a-zA-Z0-9_]+)/', $url, $usernameMatch)) {
+                    $username = $usernameMatch[1];
+                    $meta['title'] = '@' . $username . ' on X';
+                } else {
+                    $meta['title'] = 'X (formerly Twitter)';
+                }
+            }
+
+            return $meta;
+        } catch (\Exception $e) {
+            Log::warning('Failed to fetch Twitter meta with browser headers: ' . $e->getMessage());
+            // Fallback to regular method
+            return \Kovah\HtmlMeta\Facades\HtmlMeta::forUrl($url)->getMeta();
+        }
+    }
+
+    /**
+     * Try to get meta data for Twitter/X URLs using Microlink.
+     */
+    protected function getMetaFromMicrolink(string $url): ?array
+    {
+        if (!config('services.microlink.enabled', false)) {
+            return null;
+        }
+
+        $apiKey = config('services.microlink.api_key');
+        $client = new \GuzzleHttp\Client([
+            'base_uri' => config('services.microlink.base_url', 'https://api.microlink.io'),
+            'timeout' => config('services.microlink.timeout', 8),
+        ]);
+
+        try {
+            $headers = ['Accept' => 'application/json'];
+            if (!empty($apiKey)) {
+                $headers['X-Api-Key'] = $apiKey;
+            }
+
+            $response = $client->get('', [
+                'query' => ['url' => $url],
+                'headers' => $headers,
+            ]);
+
+            $payload = json_decode((string) $response->getBody(), true);
+            if (!is_array($payload) || ($payload['status'] ?? null) !== 'success') {
+                return null;
+            }
+
+            $data = $payload['data'] ?? [];
+            $meta = [];
+
+            if (!empty($data['title'])) {
+                $meta['title'] = $data['title'];
+            }
+
+            if (!empty($data['description'])) {
+                $meta['description'] = $data['description'];
+            }
+
+            $image = null;
+            if (isset($data['image'])) {
+                if (is_array($data['image'])) {
+                    $image = $data['image']['url'] ?? null;
+                } elseif (is_string($data['image'])) {
+                    $image = $data['image'];
+                }
+            }
+
+            if (!empty($image)) {
+                $meta['og:image'] = $image;
+            }
+
+            return $meta ?: null;
+        } catch (\Throwable $e) {
+            Log::warning('Microlink request failed: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    protected function isTwitterUrl(string $url): bool
+    {
+        return str_contains($url, 'twitter.com') || str_contains($url, 'x.com');
     }
 }

@@ -31,6 +31,13 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    'microlink' => [
+        'enabled' => env('MICROLINK_ENABLED', false),
+        'api_key' => env('MICROLINK_API_KEY'),
+        'base_url' => env('MICROLINK_BASE_URL', 'https://api.microlink.io'),
+        'timeout' => env('MICROLINK_TIMEOUT', 8),
+    ],
+
     // OAuth and SSO
 
     'auth0' => [
