@@ -34,7 +34,7 @@ class HtmlMeta
 
         try {
             // For Twitter/X URLs, try with browser headers to bypass login wall
-            if ($this->isTwitterUrl($url)) {
+            if ($this->isMicrolinkUrl($url)) {
                 $this->meta = $this->getMetaFromMicrolink($url) ?? $this->getMetaWithBrowserHeaders($url);
             } else {
                 $this->meta = \Kovah\HtmlMeta\Facades\HtmlMeta::forUrl($url)->getMeta();
@@ -260,5 +260,10 @@ class HtmlMeta
     protected function isTwitterUrl(string $url): bool
     {
         return str_contains($url, 'twitter.com') || str_contains($url, 'x.com');
+    }
+
+    protected function isMicrolinkUrl(string $url): bool
+    {
+        return $this->isTwitterUrl($url) || str_contains($url, 'facebook.com');
     }
 }

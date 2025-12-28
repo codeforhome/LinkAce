@@ -32,7 +32,7 @@ Guidelines:
  - Prefer hyphenated tags for multi-word concepts (e.g., "prompt-engineering", "access-control").
 
 Output format (one per line):
-ID URL: tag1, tag2, tag3
+NUMBER URL: tag1, tag2, tag3
 
 Links:
 PASTE EXPORT HERE
