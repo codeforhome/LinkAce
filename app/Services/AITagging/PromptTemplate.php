@@ -43,10 +43,15 @@ TEXT;
      * System prompt used for the online (OpenRouter) provider. Unlike renderText(),
      * the model receives the links as a JSON array in the user message and must
      * reply with strict JSON so it can be parsed by TagSuggestionParser.
+     *
+     * @param array<int,string> $vocabulary The user's existing tag names, used when
+     *                                       re-tagging older links so the model reuses
+     *                                       tags created after those links were first tagged.
+     * @param bool $existingOnly When true, the model must choose only from $vocabulary.
      */
-    public function systemPromptForApi(): string
+    public function systemPromptForApi(array $vocabulary = [], bool $existingOnly = false): string
     {
-        return <<<TEXT
+        $prompt = <<<TEXT
 You are helping tag bookmarks/links. The user message is a JSON array of links.
 
 For each link, suggest 3–8 relevant tags.
@@ -56,12 +61,29 @@ For each link, suggest 3–8 relevant tags.
 - Use lowercase. Prefer hyphenated tags for multi-word concepts ("prompt-engineering").
 - Reuse consistent tag words across similar links. Introduce at most 1–2 new tags per link.
 - Avoid near-duplicates ("js" vs "javascript")—pick one.
+TEXT;
+
+        if (!empty($vocabulary)) {
+            $list = implode(', ', $vocabulary);
+
+            if ($existingOnly) {
+                $prompt .= "\n\nExisting tag vocabulary (choose ONLY from this list — do NOT invent new tags):\n" . $list;
+            } else {
+                $prompt .= "\n\nExisting tag vocabulary (strongly prefer reusing these exact tags before "
+                    . "introducing anything new):\n" . $list;
+            }
+        }
+
+        $prompt .= <<<TEXT
+
 
 Output rules (critical):
 - Return ONLY a JSON array. No prose, no explanations, no markdown code fences.
 - Each element must be: {"id": <link id>, "tags": ["tag1", "tag2", ...]}
 - Use the exact `id` value from the input for each link.
 TEXT;
+
+        return $prompt;
     }
 
     public function renderMarkdown(): string

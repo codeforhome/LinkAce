@@ -29,9 +29,15 @@ class OnlineTagSuggester
      * be parsed by TagSuggestionParser), or null on failure / empty input.
      *
      * @param Collection<int,Link> $links
+     * @param array<int,string> $vocabulary Existing tag names to prefer/reuse (for re-tagging).
+     * @param bool $existingOnly When true, restrict suggestions to $vocabulary only.
      */
-    public function suggestForLinks(Collection $links, ?string $model = null): ?string
-    {
+    public function suggestForLinks(
+        Collection $links,
+        ?string $model = null,
+        array $vocabulary = [],
+        bool $existingOnly = false,
+    ): ?string {
         if ($links->isEmpty()) {
             return null;
         }
@@ -46,7 +52,7 @@ class OnlineTagSuggester
         ])->values()->all();
 
         $messages = [
-            ['role' => 'system', 'content' => $this->prompt->systemPromptForApi()],
+            ['role' => 'system', 'content' => $this->prompt->systemPromptForApi($vocabulary, $existingOnly)],
             ['role' => 'user', 'content' => json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '[]'],
         ];
 

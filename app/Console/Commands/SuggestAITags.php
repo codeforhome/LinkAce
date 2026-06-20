@@ -3,10 +3,13 @@
 namespace App\Console\Commands;
 
 use App\Models\Link;
+use App\Models\Tag;
 use App\Models\User;
 use App\Services\AITagging\OnlineTagSuggester;
 use App\Services\AITagging\TagApplier;
 use App\Services\AITagging\TagSuggestionParser;
+use Carbon\Carbon;
+use Carbon\Exceptions\InvalidFormatException;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 
@@ -18,6 +21,13 @@ class SuggestAITags extends Command
                         {--limit= : Limit the number of links processed.}
                         {--untagged-only : Only process links without any tags.}
                         {--exclude-broken : Exclude links with broken status.}
+                        {--from-id= : Only process links with id >= this value.}
+                        {--to-id= : Only process links with id <= this value.}
+                        {--created-after= : Only links created on/after this date (e.g. 2025-01-01).}
+                        {--created-before= : Only links created on/before this date (e.g. 2025-01-01).}
+                        {--skip-ai-tagged : Skip links that were already AI-tagged (incremental re-runs).}
+                        {--with-vocabulary : Inject your existing tags so the model reuses them (for re-tagging).}
+                        {--existing-tags-only : Restrict suggestions to your existing tags (implies --with-vocabulary, creates no new tags).}
                         {--batch=25 : Number of links sent per AI request.}
                         {--model= : Override the OpenRouter model (defaults to config).}
                         {--dry-run : Show what would change without applying.}
@@ -35,6 +45,11 @@ class SuggestAITags extends Command
     private array $applyOptions = [];
 
     private ?string $model = null;
+
+    /** @var array<int,string> */
+    private array $vocabulary = [];
+
+    private bool $existingOnly = false;
 
     public function handle(
         OnlineTagSuggester $suggester,
@@ -56,14 +71,34 @@ class SuggestAITags extends Command
             return self::INVALID;
         }
 
+        $createdAfter = $this->parseDateOption('created-after');
+        $createdBefore = $this->parseDateOption('created-before');
+        if ($createdAfter === false || $createdBefore === false) {
+            return self::INVALID;
+        }
+
         $batchSize = max(1, (int) ($this->option('batch') ?: 25));
         $this->model = $this->option('model') ?: null;
+
+        $this->existingOnly = (bool) $this->option('existing-tags-only');
+        $withVocabulary = $this->existingOnly || (bool) $this->option('with-vocabulary');
+
         $this->applyOptions = [
             'mode' => $this->option('replace') ? 'replace' : 'merge',
             'dry_run' => (bool) $this->option('dry-run'),
-            'create_tags' => !$this->option('no-create-tags'),
+            // existing-tags-only must never create tags, regardless of --no-create-tags.
+            'create_tags' => !$this->existingOnly && !$this->option('no-create-tags'),
             'skip_existing' => (bool) $this->option('skip-existing'),
         ];
+
+        if ($withVocabulary) {
+            $this->vocabulary = $this->loadVocabulary();
+            if (empty($this->vocabulary)) {
+                $this->warn('No existing tags found for this user; proceeding without a vocabulary.');
+            } else {
+                $this->line('Using ' . count($this->vocabulary) . ' existing tag(s) as vocabulary.');
+            }
+        }
 
         $this->totals = [
             'records' => 0,
@@ -89,6 +124,26 @@ class SuggestAITags extends Command
 
         if ($this->option('exclude-broken')) {
             $query->where('status', '!=', Link::STATUS_BROKEN);
+        }
+
+        if (($fromId = $this->option('from-id')) !== null) {
+            $query->where('id', '>=', (int) $fromId);
+        }
+
+        if (($toId = $this->option('to-id')) !== null) {
+            $query->where('id', '<=', (int) $toId);
+        }
+
+        if ($createdAfter !== null) {
+            $query->where('created_at', '>=', $createdAfter);
+        }
+
+        if ($createdBefore !== null) {
+            $query->where('created_at', '<=', $createdBefore);
+        }
+
+        if ($this->option('skip-ai-tagged')) {
+            $query->whereNull('ai_tagged_at');
         }
 
         $buffer = collect();
@@ -133,7 +188,7 @@ class SuggestAITags extends Command
         $this->totals['batches']++;
         $this->line(sprintf('Processing batch of %d link(s)...', $links->count()));
 
-        $raw = $suggester->suggestForLinks($links, $this->model);
+        $raw = $suggester->suggestForLinks($links, $this->model, $this->vocabulary, $this->existingOnly);
         if ($raw === null) {
             $this->totals['api_failures']++;
             $this->warn('AI request failed for this batch (see logs). Skipping.');
@@ -184,6 +239,44 @@ class SuggestAITags extends Command
         } else {
             $this->line('Unknown tags skipped: ' . $this->totals['tags_skipped_unknown']);
         }
+    }
+
+    /**
+     * Parse a date option. Returns null if unset, a Carbon instance if valid,
+     * or false if the value could not be parsed (caller should abort).
+     */
+    private function parseDateOption(string $option): Carbon|null|false
+    {
+        $value = $this->option($option);
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($value);
+        } catch (InvalidFormatException $e) {
+            $this->error(sprintf('Invalid --%s value "%s". Use a date like 2025-01-01.', $option, $value));
+            return false;
+        }
+    }
+
+    /**
+     * Load the user's existing tag names, most-used first, capped for token control.
+     *
+     * @return array<int,string>
+     */
+    private function loadVocabulary(): array
+    {
+        $cap = (int) config('services.openrouter.vocab_limit', 300);
+
+        return Tag::query()
+            ->byUser($this->user->id)
+            ->withCount('links')
+            ->orderByDesc('links_count')
+            ->orderBy('name')
+            ->limit(max(1, $cap))
+            ->pluck('name')
+            ->all();
     }
 
     private function resolveUser(): bool

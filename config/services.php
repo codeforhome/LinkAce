@@ -46,6 +46,8 @@ return [
         'base_url' => env('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1'),
         'model' => env('OPENROUTER_MODEL', 'deepseek/deepseek-chat-v3-0324'),
         'timeout' => env('OPENROUTER_TIMEOUT', 60),
+        // Max number of existing tags injected into the prompt when re-tagging (token control).
+        'vocab_limit' => env('OPENROUTER_VOCAB_LIMIT', 300),
         // Sent as OpenRouter attribution headers (optional).
         'referer' => env('OPENROUTER_REFERER', env('APP_URL')),
         'title' => env('OPENROUTER_TITLE', env('APP_NAME', 'LinkAce')),

@@ -120,6 +120,11 @@ class TagApplier
                 $link->tags()->syncWithoutDetaching($tagIds);
             }
 
+            // Mark the link as AI-tagged without firing audits/events or bumping updated_at,
+            // so incremental re-runs can skip links already processed. toBase() bypasses
+            // Eloquent's automatic timestamp handling and model events.
+            Link::whereKey($link->id)->toBase()->update(['ai_tagged_at' => now()]);
+
             $stats['links_updated']++;
         }
 
