@@ -66,19 +66,37 @@ class HtmlMeta
         // General fallback for scrape-resistant pages: only when the result is weak.
         if ($this->isWeakMeta()) {
             $jina = app(JinaReaderProvider::class);
-            if ($jina->isEnabled() && ($jinaMeta = $jina->fetch($url)) !== null) {
+            if ($jina->isEnabled() && ($jinaMeta = $jina->fetch($url)) !== null && $this->isUsefulMeta($jinaMeta)) {
                 $this->applyFallbackMeta($jinaMeta);
             }
         }
 
         // Optional legacy fallback: Microlink, only if an API key is configured and still weak.
         if ($this->isWeakMeta() && !empty(config('services.microlink.api_key'))) {
-            if (($microlinkMeta = $this->getMetaFromMicrolink($url)) !== null) {
+            $microlinkMeta = $this->getMetaFromMicrolink($url);
+            if ($microlinkMeta !== null && $this->isUsefulMeta($microlinkMeta)) {
                 $this->applyFallbackMeta($microlinkMeta);
             }
         }
 
         return $this->buildLinkMeta();
+    }
+
+    /**
+     * Whether a fallback provider actually returned something better than a bot-wall, so we
+     * don't replace one junk result with another (e.g. a reader that also got blocked).
+     *
+     * @param array<string,mixed> $meta
+     */
+    protected function isUsefulMeta(array $meta): bool
+    {
+        $title = trim((string) ($meta['title'] ?? ''));
+        $description = trim((string) ($meta['description'] ?? ''));
+
+        $usefulTitle = $title !== '' && !$this->containsJunk($title);
+        $usefulDescription = $description !== '' && !$this->containsJunk($description);
+
+        return $usefulTitle || $usefulDescription;
     }
 
     /**
@@ -100,21 +118,72 @@ class HtmlMeta
     }
 
     /**
-     * Whether the resolved meta is too weak to be useful (no real title, no description),
-     * which is the signal to try a general reader fallback.
+     * Bot-wall / placeholder phrases that mean the real page was never served (Cloudflare
+     * challenges, login walls, anti-bot checks). Matched case-insensitively as substrings
+     * against both the title and the description. Kept specific to avoid flagging legitimate
+     * articles that merely mention "login" etc.
+     *
+     * @var array<int,string>
+     */
+    protected array $junkPatterns = [
+        'just a moment',
+        'please wait',
+        'attention required',
+        'access denied',
+        'are you a robot',
+        'are you human',
+        'verify you are human',
+        'verifying you are human',
+        'please verify you',
+        'checking your browser',
+        'enable javascript',
+        'security check',
+        'you have been blocked',
+        "you've been blocked",
+        'network security',
+        'log in to continue',
+        'log in to your',
+        'please log in',
+        'sign in to continue',
+    ];
+
+    /**
+     * Whether the resolved meta is too weak to be useful, which is the signal to try a general
+     * reader fallback. Weak means the title is unusable (empty, the bare host, or a bot-wall
+     * phrase) AND the description is missing or itself a bot-wall message.
      */
     protected function isWeakMeta(): bool
     {
         $title = trim((string) ($this->meta['title'] ?? ''));
-        $description = $this->meta['description']
+        $description = (string) ($this->meta['description']
             ?? $this->meta['og:description']
             ?? $this->meta['twitter:description']
-            ?? null;
+            ?? '');
 
         $host = parse_url($this->url, PHP_URL_HOST) ?: '';
-        $titleIsWeak = $title === '' || $title === $host;
+        $hostNoWww = preg_replace('/^www\./', '', $host) ?? $host;
 
-        return $titleIsWeak && empty($description);
+        $titleIsWeak = $title === ''
+            || $title === $host
+            || $title === $hostNoWww
+            || $this->containsJunk($title);
+
+        $descriptionIsWeak = $description === '' || $this->containsJunk($description);
+
+        return $titleIsWeak && $descriptionIsWeak;
+    }
+
+    protected function containsJunk(string $text): bool
+    {
+        $text = mb_strtolower($text);
+
+        foreach ($this->junkPatterns as $pattern) {
+            if (str_contains($text, $pattern)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

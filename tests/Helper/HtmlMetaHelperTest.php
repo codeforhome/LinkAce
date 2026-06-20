@@ -359,6 +359,69 @@ class HtmlMetaHelperTest extends TestCase
     }
 
     /*
+     * A bot-wall / placeholder title (e.g. Cloudflare "Just a moment...") with no description is
+     * treated as weak, so the Jina fallback is used to recover the real metadata.
+     */
+    public function test_botwall_title_falls_back_to_jina(): void
+    {
+        Http::fake([
+            'r.jina.ai/*' => Http::response([
+                'code' => 200,
+                'data' => ['title' => 'Real Article Title', 'description' => 'The real description'],
+            ]),
+            '*' => Http::response('<!DOCTYPE html><head><title>Just a moment...</title></head></html>'),
+        ]);
+
+        $result = (new HtmlMeta())->getFromUrl('https://www.reddit.com/r/laravel/');
+
+        $this->assertEquals('Real Article Title', $result['title']);
+        $this->assertEquals('The real description', $result['description']);
+    }
+
+    /*
+     * A title that merely contains a junk keyword but has a real description must NOT be treated
+     * as weak — the fallback should not run (any stray HTTP call would fail the test).
+     */
+    public function test_junk_keyword_with_description_is_not_weak(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake([
+            '*' => Http::response(
+                '<!DOCTYPE html><head>' .
+                '<title>How to log in securely</title>' .
+                '<meta name="description" content="A guide about authentication">' .
+                '</head></html>'
+            ),
+        ]);
+
+        $result = (new HtmlMeta())->getFromUrl('https://blog.example.com/auth-guide');
+
+        $this->assertEquals('How to log in securely', $result['title']);
+        $this->assertEquals('A guide about authentication', $result['description']);
+    }
+
+    /*
+     * If the reader fallback is itself blocked (returns its own bot-wall message), we must keep
+     * the original result rather than overwriting it with another junk value.
+     */
+    public function test_fallback_not_applied_when_reader_also_blocked(): void
+    {
+        Http::fake([
+            'r.jina.ai/*' => Http::response([
+                'code' => 200,
+                'data' => ['title' => '', 'description' => "You've been blocked by network security"],
+            ]),
+            '*' => Http::response('<!DOCTYPE html><head><title>Just a moment...</title></head></html>'),
+        ]);
+
+        $result = (new HtmlMeta())->getFromUrl('https://blocked.example/');
+
+        // Jina's junk description must not replace anything; the original (weak) title remains.
+        $this->assertEquals('Just a moment...', $result['title']);
+        $this->assertEmpty($result['description']);
+    }
+
+    /*
      * Jina must NOT be consulted for disallowed (private/loopback) hosts — that would leak an
      * internal URL to a third-party service.
      */
