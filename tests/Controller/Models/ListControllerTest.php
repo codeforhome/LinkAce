@@ -206,7 +206,7 @@ class ListControllerTest extends TestCase
         $this->createTestLists();
 
         $this->get('lists/1/edit')->assertOk()->assertSee('Public List')->assertSee('Edit List');
-        $this->get('lists/2/edit')->assertOk()->assertSee('Internal List')->assertSee('Edit List');
+        $this->get('lists/2/edit')->assertForbidden();
         $this->get('lists/3/edit')->assertForbidden();
     }
 
@@ -233,13 +233,16 @@ class ListControllerTest extends TestCase
             'list_id' => 2,
             'name' => 'New Internal List',
             'visibility' => 1,
-        ])->assertRedirect('lists/2');
+        ])->assertForbidden();
 
         $this->patch('lists/3', [
             'list_id' => $list->id,
             'name' => 'New Test List',
             'visibility' => 1,
         ])->assertForbidden();
+
+        $this->assertEquals('Internal List', LinkList::find(2)->name);
+        $this->assertEquals('Private List', LinkList::find(3)->name);
     }
 
     public function test_missing_model_error_for_update(): void

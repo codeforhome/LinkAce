@@ -63,7 +63,14 @@ class CheckLinksCommand extends Command
             ->where('check_disabled', false)
             ->where(function ($query) {
                 $query->where('last_checked_at', '<', now()->subMonths(2))
-                    ->orWhereNull('last_checked_at');
+                    ->orWhereNull('last_checked_at')
+                    ->orWhere(function ($q) {
+                        // Re-check broken links more frequently than the standard 2-month cycle
+                        $q->where('status', Link::STATUS_BROKEN)
+                            ->where('last_checked_at', '<', now()->subWeeks(
+                                config('linkace.link_checks.broken_recheck_interval_weeks')
+                            ));
+                    });
             })
             ->where('url', 'LIKE', 'http%')
             ->oldest('id')
@@ -80,6 +87,11 @@ class CheckLinksCommand extends Command
     protected function checkLink(Link $link): void
     {
         $this->output->write('Checking link ' . $link->url . ' ');
+
+        if (config('html-meta.block_private_ips', true) && $this->pointsToPrivateIp($link->url)) {
+            $this->line('› Skipped (private IP).');
+            return;
+        }
 
         try {
             $request = setupHttpRequest(timeout: 20);
@@ -98,6 +110,61 @@ class CheckLinksCommand extends Command
         } else {
             $this->processWorkingLink($link);
         }
+    }
+
+    protected function pointsToPrivateIp(string $url): bool
+    {
+        $host = trim(parse_url($url, PHP_URL_HOST) ?? '', '[]');
+
+        if ($host === '') {
+            return false;
+        }
+
+        if (filter_var($host, FILTER_VALIDATE_IP) !== false) {
+            return !$this->isPublicIp($host);
+        }
+
+        foreach ($this->resolveHostIps($host) as $ip) {
+            if (!$this->isPublicIp($ip)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    protected function isPublicIp(string $ip): bool
+    {
+        return filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) !== false;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected function resolveHostIps(string $host): array
+    {
+        $ips = [];
+        $records = @dns_get_record($host, DNS_A + DNS_AAAA);
+
+        if (is_array($records)) {
+            foreach ($records as $record) {
+                if (isset($record['ip'])) {
+                    $ips[] = $record['ip'];
+                }
+                if (isset($record['ipv6'])) {
+                    $ips[] = $record['ipv6'];
+                }
+            }
+        }
+
+        if (empty($ips)) {
+            $ipv4Addresses = @gethostbynamel($host);
+            if (is_array($ipv4Addresses)) {
+                $ips = $ipv4Addresses;
+            }
+        }
+
+        return array_values(array_unique($ips));
     }
 
     protected function processMovedLink(Link $link): void

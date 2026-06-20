@@ -97,6 +97,23 @@ class BulkStoreApiTest extends TestCase
         ]);
     }
 
+    public function test_store_links_rejects_invalid_url_schemes(): void
+    {
+        $response = $this->postJson('api/v2/bulk/links', [
+            'models' => [
+                [
+                    'url' => 'javascript:alert(1)',
+                    'visibility' => 1,
+                ],
+            ],
+        ]);
+
+        $response->assertUnprocessable()
+            ->assertJsonValidationErrors(['models.0.url']);
+
+        $this->assertDatabaseCount('links', 0);
+    }
+
     public function test_store_lists(): void
     {
         $response = $this->postJson('api/v2/bulk/lists', [

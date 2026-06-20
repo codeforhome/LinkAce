@@ -1,3 +1,7 @@
+import 'bootstrap/js/dist/collapse';
+import 'bootstrap/js/dist/dropdown';
+import Tooltip from 'bootstrap/js/dist/tooltip';
+
 import { register } from './lib/views';
 import Base from './components/Base';
 
@@ -16,7 +20,11 @@ import UrlField from './components/UrlField';
 
 // Register view components
 function registerViews () {
-  register('#app', Base);
+  register('#app', class extends Base {
+    constructor (element) {
+      super(element, Tooltip);
+    }
+  });
   register('.bm-timer', BookmarkTimer);
   register('.bulk-edit', BulkEdit);
   register('.database-setup', DatabaseSetup);

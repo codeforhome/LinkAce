@@ -54,12 +54,18 @@ docker compose exec -it php composer install
 docker compose exec -it php php artisan key:generate
 ```
 
-Last step: compile all assets. Node 20 LTS is the minimum version required and recommended to use. You may use either
-NPM or Yarn for installing the asset dependencies.
+Last step: install and build the frontend assets. Node 22 LTS is the minimum version required and recommended to use.
+Use NPM to install dependencies. During active frontend work, keep the Vite dev server running in a separate shell.
 
 ```bash
 npm install
 
+npm run build
+```
+
+For active frontend development with live reload:
+
+```bash
 npm run dev
 ```
 
@@ -94,9 +100,17 @@ docker compose exec -it php composer run test
 ## LinkAce Base Docker image
 
 The Base image for LinkAce contains several packages and PHP extensions needed by LinkAce. It shortens the build time of
-the release images. This step is not needed by any developer working on LinkAce and is just a documentation for
+the release images. This step is not needed by any developer working on LinkAce and is just documentation for
 maintainers.
 
 ```bash
-docker buildx build --push --platform "linux/amd64,linux/arm64,linux/arm/v7" -t linkace/base-image:2.x-php-8.4 -f resources/docker/dockerfiles/release-base.Dockerfile .
+docker buildx build --push --platform "linux/amd64,linux/arm64,linux/arm/v7" -t linkace/base-image:2.x-php-8.5 -f resources/docker/dockerfiles/release-base.Dockerfile .
+```
+
+## Testing the Docker release build
+
+Run the following command locally to test if the release Docker image can successfully be built.
+
+```bash
+docker buildx build --platform "linux/amd64,linux/arm64,linux/arm/v7" -t linkace/release-test -f resources/docker/dockerfiles/release-multiplatform.Dockerfile .
 ```

@@ -162,6 +162,36 @@ class NoteControllerTest extends TestCase
         $this->assertEquals('Lorem ipsum dolor est updated', $note->refresh()->note);
     }
 
+    public function test_other_users_visible_notes_cannot_be_updated(): void
+    {
+        $link = Link::factory()->create();
+        $otherUser = User::factory()->create();
+        $publicNote = Note::factory()->for($otherUser)->create([
+            'link_id' => $link->id,
+            'note' => 'Original public note',
+        ]);
+        $internalNote = Note::factory()->for($otherUser)->create([
+            'link_id' => $link->id,
+            'note' => 'Original internal note',
+            'visibility' => 2,
+        ]);
+
+        $this->patch('notes/' . $publicNote->id, [
+            'link_id' => $link->id,
+            'note' => 'Updated public note',
+            'visibility' => 1,
+        ])->assertForbidden();
+
+        $this->patch('notes/' . $internalNote->id, [
+            'link_id' => $link->id,
+            'note' => 'Updated internal note',
+            'visibility' => 1,
+        ])->assertForbidden();
+
+        $this->assertEquals('Original public note', $publicNote->refresh()->note);
+        $this->assertEquals('Original internal note', $internalNote->refresh()->note);
+    }
+
     public function test_missing_model_error_for_update(): void
     {
         $this->patch('notes/1', [

@@ -2,9 +2,11 @@
 
 namespace Tests\Controller\App;
 
+use App\Enums\ActivityLog;
 use App\Enums\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Activitylog\Models\Activity;
 use Tests\TestCase;
 
 class AuditControllerTest extends TestCase
@@ -38,5 +40,23 @@ class AuditControllerTest extends TestCase
 
         $response = $this->get('system/audit');
         $response->assertSee('System: Cron Token was re-generated');
+    }
+
+    public function test_audit_page_escapes_activity_causer_name(): void
+    {
+        $this->user->assignRole(Role::ADMIN);
+        $payload = '<img src=x onerror=alert(1)>';
+        $attacker = User::factory()->create(['name' => $payload]);
+        Activity::create([
+            'description' => ActivityLog::USER_API_TOKEN_GENERATED,
+            'causer_type' => User::class,
+            'causer_id' => $attacker->id,
+        ]);
+
+        $response = $this->get('system/audit');
+
+        $response->assertOk();
+        $response->assertDontSee($payload, false);
+        $response->assertSee('&lt;img src=x onerror=alert(1)&gt;', false);
     }
 }

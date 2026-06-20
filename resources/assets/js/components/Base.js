@@ -1,6 +1,7 @@
 export default class Base {
 
-  constructor () {
+  constructor ($element, Tooltip) {
+    this.Tooltip = Tooltip;
     this.initAppData();
     this.initBootstrapTooltips();
   }
@@ -15,8 +16,6 @@ export default class Base {
 
   initBootstrapTooltips () {
     const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-    tooltipTriggerList.map(function (tooltipTriggerEl) {
-      return new bootstrap.Tooltip(tooltipTriggerEl)
-    })
+    tooltipTriggerList.map((tooltipTriggerEl) => new this.Tooltip(tooltipTriggerEl))
   }
 }

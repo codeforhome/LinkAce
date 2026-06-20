@@ -53,6 +53,8 @@ class ListController extends Controller
 
     public function update(ListUpdateRequest $request, ApiLinkList $list): JsonResponse
     {
+        $this->authorize('update', $list);
+
         $updatedList = ListRepository::update($list, $request->all());
 
         return response()->json($updatedList);

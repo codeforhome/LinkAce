@@ -72,4 +72,16 @@ class UserEntryTest extends TestCase
         $output = (new UserEntry($historyEntries[2]))->render();
         $this->assertStringContainsString('User <code>TestUser</code> was created', $output);
     }
+
+    public function test_user_names_are_escaped(): void
+    {
+        $payload = '<img src=x onerror=alert(1)>';
+        $user = User::factory()->create(['name' => $payload]);
+
+        $historyEntry = $user->audits()->first();
+        $output = (new UserEntry($historyEntry))->render();
+
+        $this->assertStringNotContainsString($payload, $output);
+        $this->assertStringContainsString('&lt;img src=x onerror=alert(1)&gt;', $output);
+    }
 }

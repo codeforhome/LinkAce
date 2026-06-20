@@ -34,7 +34,7 @@ trait AuthorizesUserApiActions
             }
             return $user->tokenCan($this->updateAbility);
         }
-        return $model->visibility !== ModelAttribute::VISIBILITY_PRIVATE;
+        return false;
     }
 
     protected function userCanDeleteModel(User $user, Model $model): bool

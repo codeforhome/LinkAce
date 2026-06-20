@@ -107,6 +107,27 @@ class BulkEditApiTest extends TestCase
         $this->assertEquals(ModelAttribute::VISIBILITY_PRIVATE, $otherLink->visibility);
     }
 
+    public function test_links_edit_skips_visible_links_owned_by_other_users(): void
+    {
+        $otherUser = User::factory()->create();
+        $otherPublicLink = Link::factory()->for($otherUser)->create();
+        $otherInternalLink = Link::factory()->for($otherUser)->create([
+            'visibility' => ModelAttribute::VISIBILITY_INTERNAL,
+        ]);
+
+        $this->patchJson('api/v2/bulk/links', [
+            'models' => [$otherPublicLink->id, $otherInternalLink->id],
+            'tags' => [],
+            'tags_mode' => 'append',
+            'lists' => [],
+            'lists_mode' => 'append',
+            'visibility' => ModelAttribute::VISIBILITY_PRIVATE,
+        ])->assertExactJson([null, null]);
+
+        $this->assertEquals(ModelAttribute::VISIBILITY_PUBLIC, $otherPublicLink->refresh()->visibility);
+        $this->assertEquals(ModelAttribute::VISIBILITY_INTERNAL, $otherInternalLink->refresh()->visibility);
+    }
+
     public function test_lists_edit(): void
     {
         Log::shouldReceive('warning')->once();
@@ -126,6 +147,23 @@ class BulkEditApiTest extends TestCase
         $this->assertEquals(ModelAttribute::VISIBILITY_INTERNAL, $lists[1]->visibility);
         $this->assertEquals(ModelAttribute::VISIBILITY_PRIVATE, $lists[2]->visibility);
         $this->assertEquals(ModelAttribute::VISIBILITY_PRIVATE, $otherList->visibility);
+    }
+
+    public function test_lists_edit_skips_visible_lists_owned_by_other_users(): void
+    {
+        $otherUser = User::factory()->create();
+        $otherPublicList = LinkList::factory()->for($otherUser)->create();
+        $otherInternalList = LinkList::factory()->for($otherUser)->create([
+            'visibility' => ModelAttribute::VISIBILITY_INTERNAL,
+        ]);
+
+        $this->patchJson('api/v2/bulk/lists', [
+            'models' => [$otherPublicList->id, $otherInternalList->id],
+            'visibility' => ModelAttribute::VISIBILITY_PRIVATE,
+        ])->assertExactJson([null, null]);
+
+        $this->assertEquals(ModelAttribute::VISIBILITY_PUBLIC, $otherPublicList->refresh()->visibility);
+        $this->assertEquals(ModelAttribute::VISIBILITY_INTERNAL, $otherInternalList->refresh()->visibility);
     }
 
     public function test_alternative_lists_edit(): void
@@ -168,6 +206,23 @@ class BulkEditApiTest extends TestCase
         $this->assertEquals(ModelAttribute::VISIBILITY_INTERNAL, $tags[1]->visibility);
         $this->assertEquals(ModelAttribute::VISIBILITY_PRIVATE, $tags[2]->visibility);
         $this->assertEquals(ModelAttribute::VISIBILITY_PRIVATE, $otherTag->visibility);
+    }
+
+    public function test_tags_edit_skips_visible_tags_owned_by_other_users(): void
+    {
+        $otherUser = User::factory()->create();
+        $otherPublicTag = Tag::factory()->for($otherUser)->create();
+        $otherInternalTag = Tag::factory()->for($otherUser)->create([
+            'visibility' => ModelAttribute::VISIBILITY_INTERNAL,
+        ]);
+
+        $this->patchJson('api/v2/bulk/tags', [
+            'models' => [$otherPublicTag->id, $otherInternalTag->id],
+            'visibility' => ModelAttribute::VISIBILITY_PRIVATE,
+        ])->assertExactJson([null, null]);
+
+        $this->assertEquals(ModelAttribute::VISIBILITY_PUBLIC, $otherPublicTag->refresh()->visibility);
+        $this->assertEquals(ModelAttribute::VISIBILITY_INTERNAL, $otherInternalTag->refresh()->visibility);
     }
 
     public function test_alternative_tags_edit(): void

@@ -50,6 +50,8 @@ class TagController extends Controller
 
     public function update(TagUpdateRequest $request, ApiTag $tag): JsonResponse
     {
+        $this->authorize('update', $tag);
+
         $updatedTag = TagRepository::update($tag, $request->all());
 
         return response()->json($updatedTag);

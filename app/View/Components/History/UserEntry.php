@@ -22,15 +22,25 @@ class UserEntry extends Component
         $timestamp = formatDateTime($this->entry->created_at);
 
         if ($this->entry->event === 'deleted') {
-            $this->changes[] = trans('user.history_deleted', ['name' => $this->entry->getModified()['name']['old']]);
+            $this->changes[] = trans('user.history_deleted', [
+                'name' => htmlspecialchars($this->entry->getModified()['name']['old']),
+            ]);
         } elseif ($this->entry->event === 'restored') {
-            $this->changes[] = trans('user.history_restored', ['name' => $this->entry->getModified()['name']['new']]);
+            $this->changes[] = trans('user.history_restored', [
+                'name' => htmlspecialchars($this->entry->getModified()['name']['new']),
+            ]);
         } elseif ($this->entry->event === 'created') {
-            $this->changes[] = trans('user.history_created', ['name' => $this->entry->getModified()['name']['new']]);
+            $this->changes[] = trans('user.history_created', [
+                'name' => htmlspecialchars($this->entry->getModified()['name']['new']),
+            ]);
         } elseif ($this->entry->event === 'blocked') {
-            $this->changes[] = trans('user.history_blocked', ['name' => $this->entry->auditable->name]);
+            $this->changes[] = trans('user.history_blocked', [
+                'name' => htmlspecialchars($this->entry->auditable->name),
+            ]);
         } elseif ($this->entry->event === 'unblocked') {
-            $this->changes[] = trans('user.history_unblocked', ['name' => $this->entry->auditable->name]);
+            $this->changes[] = trans('user.history_unblocked', [
+                'name' => htmlspecialchars($this->entry->auditable->name),
+            ]);
         } else {
             foreach ($this->entry->getModified() as $field => $change) {
                 $this->processChange($field, $change);

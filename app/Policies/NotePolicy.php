@@ -28,7 +28,7 @@ class NotePolicy
 
     public function update(User $user, Note $note): bool
     {
-        return $this->userCanAccessNote($user, $note);
+        return $note->user->is($user);
     }
 
     public function delete(User $user, Note $note): bool

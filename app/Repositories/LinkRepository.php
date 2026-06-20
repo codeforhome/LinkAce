@@ -36,9 +36,8 @@ class LinkRepository
         $data['icon'] = LinkIconMapper::getIconForUrl($data['url']);
         $data['thumbnail'] = $linkMeta['thumbnail'];
 
-        // If the meta helper was not successful, disable future checks and set the status to broken
+        // If the meta helper was not successful, set the status to broken so it can be re-checked later
         if ($linkMeta['success'] === false) {
-            $data['check_disabled'] = true;
             $data['status'] = Link::STATUS_BROKEN;
         }
 
@@ -61,6 +60,12 @@ class LinkRepository
     public static function update(Link $link, array $data): Link
     {
         $data['icon'] = LinkIconMapper::getIconForUrl($data['url'] ?? $link->url);
+
+        // If the URL changed and the link was broken, reset status so it gets re-checked
+        if (isset($data['url']) && $data['url'] !== $link->url && $link->status === Link::STATUS_BROKEN) {
+            $data['status'] = Link::STATUS_OK;
+            $data['last_checked_at'] = null;
+        }
 
         $link->update($data);
 
@@ -230,7 +235,7 @@ class LinkRepository
 
         foreach ($entries as $entry) {
             if (is_int($entry) && $entry > 0) {
-                $newEntry = $model::find($entry);
+                $newEntry = $model::visibleForUser()->find($entry);
             } else {
                 $newEntry = $model::firstOrCreate([
                     'user_id' => auth()->id(),
@@ -275,6 +280,6 @@ class LinkRepository
             $key => $newData,
         ];
 
-        Event::dispatch(AuditCustom::class, [$link]);
+        Event::dispatch(new AuditCustom($link));
     }
 }

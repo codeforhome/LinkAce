@@ -28,7 +28,7 @@ class LinkListPolicy
 
     public function update(User $user, LinkList $list): bool
     {
-        return $this->userCanAccessList($user, $list);
+        return $list->user->is($user);
     }
 
     public function delete(User $user, LinkList $list): bool
