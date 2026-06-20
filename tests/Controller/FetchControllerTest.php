@@ -171,4 +171,33 @@ class FetchControllerTest extends TestCase
 
         $response->assertOk()->assertJson(['keywords' => null]);
     }
+
+    public function test_meta_for_url_returns_title_and_description(): void
+    {
+        $testHtml = '<!DOCTYPE html><head>' .
+            '<title>Example Title</title>' .
+            '<meta name="description" content="This an example description">' .
+            '</head></html>';
+
+        Http::fake(['example.com' => Http::response($testHtml, 200)]);
+
+        $response = $this->post('fetch/meta-for-url', [
+            'url' => 'https://example.com',
+        ]);
+
+        $response->assertOk()->assertJson([
+            'success' => true,
+            'title' => 'Example Title',
+            'description' => 'This an example description',
+        ]);
+    }
+
+    public function test_meta_for_url_requires_valid_url(): void
+    {
+        $response = $this->post('fetch/meta-for-url', [
+            'url' => 'not a url',
+        ]);
+
+        $response->assertSessionHasErrors('url');
+    }
 }

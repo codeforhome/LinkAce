@@ -312,4 +312,71 @@ class HtmlMetaHelperTest extends TestCase
         $this->assertArrayHasKey('description', $result);
         $this->assertEquals('Qualität', $result['description']);
     }
+
+    /*
+     * A Twitter/X status URL is resolved through FxTwitter, not a plain fetch, so the tweet
+     * author becomes the title and the tweet text becomes the description.
+     */
+    public function test_tweet_meta_resolved_via_fxtwitter(): void
+    {
+        Http::fake([
+            'api.fxtwitter.com/*' => Http::response([
+                'code' => 200,
+                'tweet' => [
+                    'text' => 'just setting up my twttr',
+                    'author' => ['name' => 'jack', 'screen_name' => 'jack'],
+                    'media' => ['photos' => [['url' => 'https://pbs.twimg.com/media/abc.jpg']]],
+                ],
+            ]),
+        ]);
+
+        $result = (new HtmlMeta())->getFromUrl('https://x.com/jack/status/20');
+
+        $this->assertTrue($result['success']);
+        $this->assertEquals('jack (@jack)', $result['title']);
+        $this->assertEquals('just setting up my twttr', $result['description']);
+        $this->assertEquals('https://pbs.twimg.com/media/abc.jpg', $result['thumbnail']);
+    }
+
+    /*
+     * When a normal page yields no usable title/description, the Jina Reader fallback fills it in.
+     */
+    public function test_weak_meta_falls_back_to_jina(): void
+    {
+        Http::fake([
+            'r.jina.ai/*' => Http::response([
+                'code' => 200,
+                'data' => ['title' => 'Recovered Title', 'description' => 'Recovered description'],
+            ]),
+            // The standard fetch returns a page with no title and no meta description.
+            '*' => Http::response('<!DOCTYPE html><html><head></head><body>hi</body></html>'),
+        ]);
+
+        $result = (new HtmlMeta())->getFromUrl('https://hard-to-scrape.example/');
+
+        $this->assertEquals('Recovered Title', $result['title']);
+        $this->assertEquals('Recovered description', $result['description']);
+    }
+
+    /*
+     * Jina must NOT be consulted for disallowed (private/loopback) hosts — that would leak an
+     * internal URL to a third-party service.
+     */
+    public function test_jina_not_called_for_disallowed_ip(): void
+    {
+        $url = 'http://internal-service';
+
+        HtmlMetaFacade::shouldReceive('forUrl')
+            ->once()
+            ->with($url)
+            ->andThrow(new DisallowedIpException("$url resolves to a non-public IP address."));
+
+        // Any HTTP call (e.g. to Jina) would be a stray request and fail the test.
+        Http::preventStrayRequests();
+
+        $result = (new HtmlMeta())->getFromUrl($url);
+
+        $this->assertFalse($result['success']);
+        $this->assertEquals('internal-service', $result['title']);
+    }
 }

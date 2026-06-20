@@ -38,6 +38,22 @@ return [
         'timeout' => env('MICROLINK_TIMEOUT', 8),
     ],
 
+    // Free, open API that resolves Twitter/X tweet metadata (author, text, media)
+    // without authentication. Used by the link metadata provider chain.
+    'fxtwitter' => [
+        'base_url' => env('FXTWITTER_BASE_URL', 'https://api.fxtwitter.com'),
+        'timeout' => env('FXTWITTER_TIMEOUT', 8),
+    ],
+
+    // Jina AI Reader: general fallback that renders scrape-resistant/JS-heavy pages
+    // and returns a clean title + content. Free, no key required (a key raises limits).
+    'jina' => [
+        'enabled' => env('JINA_READER_ENABLED', true),
+        'base_url' => env('JINA_READER_BASE_URL', 'https://r.jina.ai'),
+        'api_key' => env('JINA_API_KEY'),
+        'timeout' => env('JINA_READER_TIMEOUT', 15),
+    ],
+
     // Optional online AI tag suggestions via OpenRouter (e.g. DeepSeek).
     // Disabled by default: enabling it sends link data to an external service.
     'openrouter' => [

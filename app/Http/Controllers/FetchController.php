@@ -144,7 +144,9 @@ class FetchController extends Controller
     public function metaFromUrl(Request $request): JsonResponse
     {
         $request->validate([
-            'url' => ['required', 'url', new NoPrivateIpRule],
+            // Private/loopback IPs are rejected downstream by HtmlMeta (DisallowedIpException),
+            // which returns an unsuccessful result rather than fetching internal hosts.
+            'url' => ['required', 'url'],
         ]);
 
         $meta = (new HtmlMeta())->getFromUrl($request->input('url'));

@@ -2,6 +2,8 @@
 
 namespace App\Helper;
 
+use App\Services\Metadata\FxTwitterProvider;
+use App\Services\Metadata\JinaReaderProvider;
 use Illuminate\Support\Facades\Log;
 use Kovah\HtmlMeta\Exceptions\DisallowedIpException;
 use Kovah\HtmlMeta\Exceptions\InvalidUrlException;
@@ -33,10 +35,15 @@ class HtmlMeta
         $this->url = $url;
         $this->buildFallback();
 
+        // Provider chain: a specialized provider for known-hard hosts (tweets) is tried first;
+        // otherwise the standard fetch runs, and a general reader fallback fills in when the
+        // result is too weak (e.g. only a hostname title and no description).
+        $fxTwitter = app(FxTwitterProvider::class);
+
         try {
-            // For Twitter/X URLs, try with browser headers to bypass login wall
-            if ($this->isMicrolinkUrl($url)) {
-                $this->meta = $this->getMetaFromMicrolink($url) ?? $this->getMetaWithBrowserHeaders($url);
+            if ($fxTwitter->handles($url)) {
+                $this->meta = $fxTwitter->fetch($url)
+                    ?? \Kovah\HtmlMeta\Facades\HtmlMeta::forUrl($url)->getMeta();
             } else {
                 $this->meta = \Kovah\HtmlMeta\Facades\HtmlMeta::forUrl($url)->getMeta();
             }
@@ -47,7 +54,8 @@ class HtmlMeta
             }
             return $this->fallback;
         } catch (DisallowedIpException|UnreachableUrlException $e) {
-            // DisallowedIpException catches all private and loopback IPs as well as hostnames resolving to those IPs
+            // DisallowedIpException catches all private and loopback IPs as well as hostnames resolving to those IPs.
+            // Do NOT fall through to remote readers here — that would leak an internal URL to a third party.
             Log::warning($url . ': ' . $e->getMessage());
             if ($flashAlerts) {
                 flash(trans('link.added_request_error'), 'warning');
@@ -55,7 +63,76 @@ class HtmlMeta
             return $this->fallback;
         }
 
+        // General fallback for scrape-resistant pages: only when the result is weak.
+        if ($this->isWeakMeta()) {
+            $jina = app(JinaReaderProvider::class);
+            if ($jina->isEnabled() && ($jinaMeta = $jina->fetch($url)) !== null) {
+                $this->applyFallbackMeta($jinaMeta);
+            }
+        }
+
+        // Optional legacy fallback: Microlink, only if an API key is configured and still weak.
+        if ($this->isWeakMeta() && !empty(config('services.microlink.api_key'))) {
+            if (($microlinkMeta = $this->getMetaFromMicrolink($url)) !== null) {
+                $this->applyFallbackMeta($microlinkMeta);
+            }
+        }
+
         return $this->buildLinkMeta();
+    }
+
+    /**
+     * Merge meta from a fallback provider. Because we only reach here when the current meta is
+     * weak, the provider's title/description take precedence; other keys (e.g. og:image) only
+     * fill gaps so a good thumbnail from the standard fetch is never clobbered.
+     *
+     * @param array<string,mixed> $extra
+     */
+    protected function applyFallbackMeta(array $extra): void
+    {
+        foreach (['title', 'description'] as $key) {
+            if (!empty($extra[$key])) {
+                $this->meta[$key] = $extra[$key];
+            }
+        }
+
+        $this->meta = $this->fillMissing($this->meta, $extra);
+    }
+
+    /**
+     * Whether the resolved meta is too weak to be useful (no real title, no description),
+     * which is the signal to try a general reader fallback.
+     */
+    protected function isWeakMeta(): bool
+    {
+        $title = trim((string) ($this->meta['title'] ?? ''));
+        $description = $this->meta['description']
+            ?? $this->meta['og:description']
+            ?? $this->meta['twitter:description']
+            ?? null;
+
+        $host = parse_url($this->url, PHP_URL_HOST) ?: '';
+        $titleIsWeak = $title === '' || $title === $host;
+
+        return $titleIsWeak && empty($description);
+    }
+
+    /**
+     * Fill keys missing/empty in $base from $extra without overwriting good values.
+     *
+     * @param array<string,mixed> $base
+     * @param array<string,mixed> $extra
+     * @return array<string,mixed>
+     */
+    protected function fillMissing(array $base, array $extra): array
+    {
+        foreach ($extra as $key => $value) {
+            if ($value !== null && $value !== '' && empty($base[$key])) {
+                $base[$key] = $value;
+            }
+        }
+
+        return $base;
     }
 
     // Build a response array containing the link meta including a success flag.
@@ -143,62 +220,7 @@ class HtmlMeta
     }
 
     /**
-     * Get meta data for Twitter/X URLs using browser headers to bypass login wall
-     */
-    protected function getMetaWithBrowserHeaders(string $url): array
-    {
-        $client = new \GuzzleHttp\Client([
-            'headers' => [
-                'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                'Accept-Language' => 'en-US,en;q=0.5',
-                'Accept-Encoding' => 'gzip, deflate',
-                'Connection' => 'keep-alive',
-                'Upgrade-Insecure-Requests' => '1',
-            ],
-            'timeout' => 10,
-        ]);
-
-        try {
-            $response = $client->get($url);
-            $html = $response->getBody()->getContents();
-
-            // Parse meta tags manually
-            $meta = [];
-            if (preg_match_all('/<meta[^>]+property=["\']([^"\']+)["\'][^>]+content=["\']([^"\']+)["\'][^>]*>/i', $html, $matches)) {
-                foreach ($matches[1] as $index => $property) {
-                    $meta[$property] = $matches[2][$index];
-                }
-            }
-
-            // Also check name attributes
-            if (preg_match_all('/<meta[^>]+name=["\']([^"\']+)["\'][^>]+content=["\']([^"\']+)["\'][^>]*>/i', $html, $matches)) {
-                foreach ($matches[1] as $index => $name) {
-                    $meta[$name] = $matches[2][$index];
-                }
-            }
-
-            // For Twitter/X, if we don't have meta data, try to extract from HTML content
-            if (empty($meta['og:title']) && empty($meta['title'])) {
-                // Try to extract username from URL
-                if (preg_match('/(?:twitter\.com|x\.com)\/([a-zA-Z0-9_]+)/', $url, $usernameMatch)) {
-                    $username = $usernameMatch[1];
-                    $meta['title'] = '@' . $username . ' on X';
-                } else {
-                    $meta['title'] = 'X (formerly Twitter)';
-                }
-            }
-
-            return $meta;
-        } catch (\Exception $e) {
-            Log::warning('Failed to fetch Twitter meta with browser headers: ' . $e->getMessage());
-            // Fallback to regular method
-            return \Kovah\HtmlMeta\Facades\HtmlMeta::forUrl($url)->getMeta();
-        }
-    }
-
-    /**
-     * Try to get meta data for Twitter/X URLs using Microlink.
+     * Try to get meta data for a URL using Microlink (optional legacy fallback).
      */
     protected function getMetaFromMicrolink(string $url): ?array
     {
@@ -262,10 +284,5 @@ class HtmlMeta
     protected function isTwitterUrl(string $url): bool
     {
         return str_contains($url, 'twitter.com') || str_contains($url, 'x.com');
-    }
-
-    protected function isMicrolinkUrl(string $url): bool
-    {
-        return $this->isTwitterUrl($url) || str_contains($url, 'facebook.com');
     }
 }
