@@ -38,6 +38,19 @@ return [
         'timeout' => env('MICROLINK_TIMEOUT', 8),
     ],
 
+    // Optional online AI tag suggestions via OpenRouter (e.g. DeepSeek).
+    // Disabled by default: enabling it sends link data to an external service.
+    'openrouter' => [
+        'enabled' => env('OPENROUTER_ENABLED', false),
+        'api_key' => env('OPENROUTER_API_KEY'),
+        'base_url' => env('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1'),
+        'model' => env('OPENROUTER_MODEL', 'deepseek/deepseek-chat-v3-0324'),
+        'timeout' => env('OPENROUTER_TIMEOUT', 60),
+        // Sent as OpenRouter attribution headers (optional).
+        'referer' => env('OPENROUTER_REFERER', env('APP_URL')),
+        'title' => env('OPENROUTER_TITLE', env('APP_NAME', 'LinkAce')),
+    ],
+
     // OAuth and SSO
 
     'auth0' => [

@@ -39,6 +39,31 @@ PASTE EXPORT HERE
 TEXT;
     }
 
+    /**
+     * System prompt used for the online (OpenRouter) provider. Unlike renderText(),
+     * the model receives the links as a JSON array in the user message and must
+     * reply with strict JSON so it can be parsed by TagSuggestionParser.
+     */
+    public function systemPromptForApi(): string
+    {
+        return <<<TEXT
+You are helping tag bookmarks/links. The user message is a JSON array of links.
+
+For each link, suggest 3–8 relevant tags.
+- Each link includes a `current_tags` array. Treat those as the preferred vocabulary:
+  reuse them where they still apply, and only add missing tags.
+- Prefer specific tags ("laravel" over "php", "orm" over "database" when applicable).
+- Use lowercase. Prefer hyphenated tags for multi-word concepts ("prompt-engineering").
+- Reuse consistent tag words across similar links. Introduce at most 1–2 new tags per link.
+- Avoid near-duplicates ("js" vs "javascript")—pick one.
+
+Output rules (critical):
+- Return ONLY a JSON array. No prose, no explanations, no markdown code fences.
+- Each element must be: {"id": <link id>, "tags": ["tag1", "tag2", ...]}
+- Use the exact `id` value from the input for each link.
+TEXT;
+    }
+
     public function renderMarkdown(): string
     {
         $text = $this->renderText();

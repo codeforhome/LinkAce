@@ -93,6 +93,7 @@ Route::group(['middleware' => ['auth']], function () {
         ->name('dashboard');
 
     Route::get('ai-tagging', [AITaggingController::class, 'index'])->name('ai-tagging.index');
+    Route::post('ai-tagging/suggest', [AITaggingController::class, 'suggest'])->name('ai-tagging.suggest');
     Route::post('ai-tagging/export', [AITaggingController::class, 'export'])->name('ai-tagging.export');
     Route::post('ai-tagging/import', [AITaggingController::class, 'import'])->name('ai-tagging.import');
     Route::post('ai-tagging/apply', [AITaggingController::class, 'apply'])->name('ai-tagging.apply');

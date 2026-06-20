@@ -5,6 +5,7 @@ namespace App\Http\Controllers\App;
 use App\Http\Controllers\Controller;
 use App\Models\Link;
 use App\Models\Tag;
+use App\Services\AITagging\OnlineTagSuggester;
 use App\Services\AITagging\PromptTemplate;
 use App\Services\AITagging\TagSuggestionParser;
 use Illuminate\Contracts\View\View;
@@ -23,7 +24,94 @@ class AITaggingController extends Controller
         return view('app.ai-tagging.index', [
             'pageTitle' => 'AI Tagging',
             'promptText' => app(PromptTemplate::class)->renderText(),
+            'onlineEnabled' => app(OnlineTagSuggester::class)->isEnabled(),
+            'onlineModel' => config('services.openrouter.model'),
         ]);
+    }
+
+    /**
+     * Generate tag suggestions online via OpenRouter, then route the result into
+     * the same preview -> confirm -> apply flow used by file imports.
+     */
+    public function suggest(Request $request): RedirectResponse
+    {
+        $suggester = app(OnlineTagSuggester::class);
+        if (!$suggester->isEnabled()) {
+            flash('Online AI suggestions are not enabled. Set OPENROUTER_ENABLED and OPENROUTER_API_KEY.', 'error');
+            return redirect()->route('ai-tagging.index');
+        }
+
+        $validated = $request->validate([
+            'limit' => ['nullable', 'integer', 'min:1', 'max:200'],
+            'untagged_only' => ['nullable', 'boolean'],
+            'exclude_broken' => ['nullable', 'boolean'],
+            'apply_behavior' => ['nullable', 'in:merge,replace'],
+            'skip_existing' => ['nullable', 'boolean'],
+            'create_tags' => ['nullable', 'boolean'],
+        ]);
+
+        $limit = $validated['limit'] ?? 50;
+        $applyBehavior = $validated['apply_behavior'] ?? 'merge';
+        $skipExisting = $request->boolean('skip_existing');
+        $createTags = $request->boolean('create_tags');
+
+        $query = Link::query()
+            ->where('user_id', auth()->id())
+            ->with(['tags:id,name'])
+            ->orderBy('id');
+
+        if ($request->boolean('untagged_only')) {
+            $query->whereDoesntHave('tags');
+        }
+
+        if ($request->boolean('exclude_broken')) {
+            $query->where('status', '!=', Link::STATUS_BROKEN);
+        }
+
+        $links = $query->limit($limit)->get();
+        if ($links->isEmpty()) {
+            flash('No matching links to suggest tags for.', 'warning');
+            return redirect()->route('ai-tagging.index');
+        }
+
+        // Send in modest batches to keep each request responsive, then merge the
+        // parsed records into a single file the existing preview can consume.
+        $parser = app(TagSuggestionParser::class);
+        $records = [];
+        foreach ($links->chunk(25) as $chunk) {
+            $raw = $suggester->suggestForLinks($chunk);
+            if ($raw === null) {
+                continue;
+            }
+
+            foreach ($parser->parse($raw) as $record) {
+                if (!empty($record['id']) && !empty($record['tags'])) {
+                    $records[] = ['id' => $record['id'], 'tags' => array_values($record['tags'])];
+                }
+            }
+        }
+
+        if (empty($records)) {
+            flash('The AI did not return usable suggestions. Check the logs and try again.', 'error');
+            return redirect()->route('ai-tagging.index');
+        }
+
+        $importDir = storage_path('ai-tagging/imports');
+        File::ensureDirectoryExists($importDir);
+        $path = $importDir . DIRECTORY_SEPARATOR . 'ai-online-' . now()->format('Ymd-His') . '.json';
+        File::put($path, json_encode($records, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) ?: '[]');
+
+        $preview = $this->buildPreview(
+            filepath: $path,
+            applyBehavior: $applyBehavior,
+            skipExisting: $skipExisting,
+            createTags: $createTags,
+        );
+
+        $request->session()->put(self::PREVIEW_SESSION_KEY, $preview);
+        flash('AI suggestions generated. Review the changes below, then Apply.', 'success');
+
+        return redirect()->route('ai-tagging.index');
     }
 
     public function export(Request $request): BinaryFileResponse|RedirectResponse

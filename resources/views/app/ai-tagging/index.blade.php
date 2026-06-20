@@ -90,6 +90,91 @@
         </div>
     </div>
 
+    <div class="card mb-4" id="ai-tag-auto">
+        <div class="card-header">
+            Auto-suggest with AI (online)
+        </div>
+        <div class="card-body">
+            @if($onlineEnabled)
+                <p class="mb-2">
+                    Generate tag suggestions automatically using the configured online model
+                    (<code>{{ $onlineModel }}</code>). You will review a preview before anything is applied.
+                </p>
+                <div class="alert alert-warning">
+                    This sends your link data (URL, title, description) to an external AI provider.
+                </div>
+
+                <form action="{{ route('ai-tagging.suggest') }}" method="post">
+                    @csrf
+
+                    <div class="row g-3 align-items-end">
+                        <div class="col-12 col-md-3">
+                            <label for="auto_limit" class="form-label">Limit</label>
+                            <input type="number" min="1" max="200" name="limit" id="auto_limit" class="form-control"
+                                value="50">
+                            <div class="form-text">Max 200 links per run.</div>
+                        </div>
+
+                        <div class="col-12 col-md-4">
+                            <label for="auto_apply_behavior" class="form-label">Apply behavior</label>
+                            <select name="apply_behavior" id="auto_apply_behavior" class="form-select">
+                                <option value="merge">Merge with existing tags</option>
+                                <option value="replace">Replace existing tags</option>
+                            </select>
+                        </div>
+
+                        <div class="col-12 col-md-5">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="untagged_only" id="auto_untagged_only"
+                                    value="1" checked>
+                                <label class="form-check-label" for="auto_untagged_only">
+                                    Only untagged links
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="exclude_broken" id="auto_exclude_broken"
+                                    value="1" checked>
+                                <label class="form-check-label" for="auto_exclude_broken">
+                                    Exclude broken links
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="skip_existing" id="auto_skip_existing"
+                                    value="1">
+                                <label class="form-check-label" for="auto_skip_existing">
+                                    Skip links that already have tags
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="create_tags" id="auto_create_tags"
+                                    value="1" checked>
+                                <label class="form-check-label" for="auto_create_tags">
+                                    Auto-create new tags
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary mt-4">
+                        <x-icon.cog class="me-2"/>
+                        Suggest tags with AI
+                    </button>
+                    <div class="form-text mt-2">
+                        Builds a preview below — no changes are applied until you confirm.
+                    </div>
+                </form>
+            @else
+                <p class="mb-2">
+                    Online AI suggestions are disabled. To enable, set the following in your
+                    <code>.env</code> and clear the config cache:
+                </p>
+                <pre class="mb-0"><code>OPENROUTER_ENABLED=true
+OPENROUTER_API_KEY=your-key-from-openrouter.ai
+OPENROUTER_MODEL=deepseek/deepseek-chat-v3-0324</code></pre>
+            @endif
+        </div>
+    </div>
+
     <div class="card mb-4">
         <div class="card-header">
             AI Prompt Template
