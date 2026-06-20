@@ -78,6 +78,7 @@ class Link extends Model implements Auditable
         'check_disabled' => 'boolean',
         'last_checked_at' => 'datetime',
         'ai_tagged_at' => 'datetime',
+        'raw_tags' => 'array',
     ];
 
     public static array $allowOrderBy = [
@@ -115,6 +116,7 @@ class Link extends Model implements Auditable
     protected array $auditExclude = [
         'icon',
         'ai_tagged_at',
+        'raw_tags',
     ];
 
     public array $auditModifiers = [

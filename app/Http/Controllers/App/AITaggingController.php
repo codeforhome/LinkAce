@@ -8,6 +8,7 @@ use App\Models\Tag;
 use App\Services\AITagging\OnlineTagSuggester;
 use App\Services\AITagging\PromptTemplate;
 use App\Services\AITagging\TagSuggestionParser;
+use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -26,6 +27,7 @@ class AITaggingController extends Controller
             'promptText' => app(PromptTemplate::class)->renderText(),
             'onlineEnabled' => app(OnlineTagSuggester::class)->isEnabled(),
             'onlineModel' => config('services.openrouter.model'),
+            'canonicalCount' => Tag::query()->where('user_id', auth()->id())->canonical()->count(),
         ]);
     }
 
@@ -45,6 +47,13 @@ class AITaggingController extends Controller
             'limit' => ['nullable', 'integer', 'min:1', 'max:200'],
             'untagged_only' => ['nullable', 'boolean'],
             'exclude_broken' => ['nullable', 'boolean'],
+            'skip_ai_tagged' => ['nullable', 'boolean'],
+            'from_id' => ['nullable', 'integer', 'min:1'],
+            'to_id' => ['nullable', 'integer', 'min:1'],
+            'created_after' => ['nullable', 'date'],
+            'created_before' => ['nullable', 'date'],
+            'vocabulary' => ['nullable', 'in:none,all,canonical'],
+            'max_tags' => ['nullable', 'integer', 'min:1', 'max:20'],
             'apply_behavior' => ['nullable', 'in:merge,replace'],
             'skip_existing' => ['nullable', 'boolean'],
             'create_tags' => ['nullable', 'boolean'],
@@ -53,7 +62,21 @@ class AITaggingController extends Controller
         $limit = $validated['limit'] ?? 50;
         $applyBehavior = $validated['apply_behavior'] ?? 'merge';
         $skipExisting = $request->boolean('skip_existing');
-        $createTags = $request->boolean('create_tags');
+        $vocabularyMode = $validated['vocabulary'] ?? 'none';
+
+        // Canonical mode never invents tags; otherwise honour the checkbox.
+        $existingOnly = $vocabularyMode === 'canonical';
+        $createTags = $existingOnly ? false : $request->boolean('create_tags');
+
+        // Resolve per-link cap: explicit value wins, else canonical mode uses the config default.
+        $maxTags = $validated['max_tags']
+            ?? ($vocabularyMode === 'canonical' ? (int) config('services.openrouter.canonical_max_tags', 3) : null);
+
+        $vocabulary = $this->loadVocabulary($vocabularyMode);
+        if ($vocabularyMode === 'canonical' && empty($vocabulary)) {
+            flash('No canonical tags set. Mark some first with: php artisan tags:canonical --add=...', 'error');
+            return redirect()->route('ai-tagging.index');
+        }
 
         $query = Link::query()
             ->where('user_id', auth()->id())
@@ -68,10 +91,38 @@ class AITaggingController extends Controller
             $query->where('status', '!=', Link::STATUS_BROKEN);
         }
 
+        if ($request->boolean('skip_ai_tagged')) {
+            $query->whereNull('ai_tagged_at');
+        }
+
+        if (!empty($validated['from_id'])) {
+            $query->where('id', '>=', $validated['from_id']);
+        }
+
+        if (!empty($validated['to_id'])) {
+            $query->where('id', '<=', $validated['to_id']);
+        }
+
+        if (!empty($validated['created_after'])) {
+            $query->where('created_at', '>=', Carbon::parse($validated['created_after']));
+        }
+
+        if (!empty($validated['created_before'])) {
+            $query->where('created_at', '<=', Carbon::parse($validated['created_before']));
+        }
+
         $links = $query->limit($limit)->get();
         if ($links->isEmpty()) {
             flash('No matching links to suggest tags for.', 'warning');
             return redirect()->route('ai-tagging.index');
+        }
+
+        // Hard allow-set for existing/canonical mode (LLMs don't reliably obey "only from list").
+        $allowed = [];
+        if ($existingOnly) {
+            foreach ($vocabulary as $name) {
+                $allowed[mb_strtolower($name)] = true;
+            }
         }
 
         // Send in modest batches to keep each request responsive, then merge the
@@ -79,14 +130,27 @@ class AITaggingController extends Controller
         $parser = app(TagSuggestionParser::class);
         $records = [];
         foreach ($links->chunk(25) as $chunk) {
-            $raw = $suggester->suggestForLinks($chunk);
+            $raw = $suggester->suggestForLinks($chunk, null, $vocabulary, $existingOnly, $maxTags);
             if ($raw === null) {
                 continue;
             }
 
             foreach ($parser->parse($raw) as $record) {
-                if (!empty($record['id']) && !empty($record['tags'])) {
-                    $records[] = ['id' => $record['id'], 'tags' => array_values($record['tags'])];
+                if (empty($record['id']) || empty($record['tags'])) {
+                    continue;
+                }
+
+                $tags = array_values($record['tags']);
+                // Restrict to the allowed vocabulary, then enforce the cap, so the written
+                // file (preview + apply source) is consistent with the chosen mode.
+                if (!empty($allowed)) {
+                    $tags = array_values(array_filter($tags, fn($t) => isset($allowed[mb_strtolower($t)])));
+                }
+                if ($maxTags !== null) {
+                    $tags = array_slice($tags, 0, $maxTags);
+                }
+                if (!empty($tags)) {
+                    $records[] = ['id' => $record['id'], 'tags' => $tags];
                 }
             }
         }
@@ -346,6 +410,33 @@ class AITaggingController extends Controller
             'items' => $items,
             'items_limited' => $stats['records'] > count($items),
         ];
+    }
+
+    /**
+     * Load the current user's tag names for prompt injection.
+     *
+     * @return array<int,string>
+     */
+    private function loadVocabulary(string $mode): array
+    {
+        if ($mode === 'none') {
+            return [];
+        }
+
+        $cap = (int) config('services.openrouter.vocab_limit', 300);
+
+        $query = Tag::query()
+            ->where('user_id', auth()->id())
+            ->withCount('links')
+            ->orderByDesc('links_count')
+            ->orderBy('name')
+            ->limit(max(1, $cap));
+
+        if ($mode === 'canonical') {
+            $query->canonical();
+        }
+
+        return $query->pluck('name')->all();
     }
 
     private function resolveLinkForUser(?int $id, ?string $url): ?Link

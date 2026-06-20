@@ -28,6 +28,8 @@ class SuggestAITags extends Command
                         {--skip-ai-tagged : Skip links that were already AI-tagged (incremental re-runs).}
                         {--with-vocabulary : Inject your existing tags so the model reuses them (for re-tagging).}
                         {--existing-tags-only : Restrict suggestions to your existing tags (implies --with-vocabulary, creates no new tags).}
+                        {--canonical-only : Restrict suggestions to your canonical tags only (implies --existing-tags-only).}
+                        {--max-tags= : Cap tags applied per link (defaults to 3 in --canonical-only mode).}
                         {--batch=25 : Number of links sent per AI request.}
                         {--model= : Override the OpenRouter model (defaults to config).}
                         {--dry-run : Show what would change without applying.}
@@ -41,7 +43,7 @@ class SuggestAITags extends Command
     /** @var array<string,int> */
     private array $totals = [];
 
-    /** @var array{mode:string,dry_run:bool,create_tags:bool,skip_existing:bool} */
+    /** @var array{mode:string,dry_run:bool,create_tags:bool,skip_existing:bool,max_tags:int|null} */
     private array $applyOptions = [];
 
     private ?string $model = null;
@@ -50,6 +52,10 @@ class SuggestAITags extends Command
     private array $vocabulary = [];
 
     private bool $existingOnly = false;
+
+    private bool $canonicalOnly = false;
+
+    private ?int $maxTags = null;
 
     public function handle(
         OnlineTagSuggester $suggester,
@@ -80,8 +86,18 @@ class SuggestAITags extends Command
         $batchSize = max(1, (int) ($this->option('batch') ?: 25));
         $this->model = $this->option('model') ?: null;
 
-        $this->existingOnly = (bool) $this->option('existing-tags-only');
+        // canonical-only is the strictest form of existing-tags-only.
+        $this->canonicalOnly = (bool) $this->option('canonical-only');
+        $this->existingOnly = $this->canonicalOnly || (bool) $this->option('existing-tags-only');
         $withVocabulary = $this->existingOnly || (bool) $this->option('with-vocabulary');
+
+        // Resolve the per-link tag cap: explicit --max-tags wins; otherwise canonical mode defaults
+        // to the configured browsing-bucket cap.
+        if ($this->option('max-tags') !== null) {
+            $this->maxTags = max(1, (int) $this->option('max-tags'));
+        } elseif ($this->canonicalOnly) {
+            $this->maxTags = max(1, (int) config('services.openrouter.canonical_max_tags', 3));
+        }
 
         $this->applyOptions = [
             'mode' => $this->option('replace') ? 'replace' : 'merge',
@@ -89,14 +105,26 @@ class SuggestAITags extends Command
             // existing-tags-only must never create tags, regardless of --no-create-tags.
             'create_tags' => !$this->existingOnly && !$this->option('no-create-tags'),
             'skip_existing' => (bool) $this->option('skip-existing'),
+            'max_tags' => $this->maxTags,
         ];
 
         if ($withVocabulary) {
             $this->vocabulary = $this->loadVocabulary();
+            $label = $this->canonicalOnly ? 'canonical' : 'existing';
             if (empty($this->vocabulary)) {
+                if ($this->canonicalOnly) {
+                    $this->error('No canonical tags found. Mark some with: php artisan tags:canonical --add=...');
+                    return self::FAILURE;
+                }
                 $this->warn('No existing tags found for this user; proceeding without a vocabulary.');
             } else {
-                $this->line('Using ' . count($this->vocabulary) . ' existing tag(s) as vocabulary.');
+                $this->line('Using ' . count($this->vocabulary) . ' ' . $label . ' tag(s) as vocabulary.');
+            }
+
+            // In existing-only/canonical mode, hard-restrict applied tags to the vocabulary —
+            // the prompt asks the model to comply, but this guarantees it regardless.
+            if ($this->existingOnly) {
+                $this->applyOptions['allowed_tags'] = $this->vocabulary;
             }
         }
 
@@ -188,7 +216,7 @@ class SuggestAITags extends Command
         $this->totals['batches']++;
         $this->line(sprintf('Processing batch of %d link(s)...', $links->count()));
 
-        $raw = $suggester->suggestForLinks($links, $this->model, $this->vocabulary, $this->existingOnly);
+        $raw = $suggester->suggestForLinks($links, $this->model, $this->vocabulary, $this->existingOnly, $this->maxTags);
         if ($raw === null) {
             $this->totals['api_failures']++;
             $this->warn('AI request failed for this batch (see logs). Skipping.');
@@ -269,14 +297,18 @@ class SuggestAITags extends Command
     {
         $cap = (int) config('services.openrouter.vocab_limit', 300);
 
-        return Tag::query()
+        $query = Tag::query()
             ->byUser($this->user->id)
             ->withCount('links')
             ->orderByDesc('links_count')
             ->orderBy('name')
-            ->limit(max(1, $cap))
-            ->pluck('name')
-            ->all();
+            ->limit(max(1, $cap));
+
+        if ($this->canonicalOnly) {
+            $query->canonical();
+        }
+
+        return $query->pluck('name')->all();
     }
 
     private function resolveUser(): bool

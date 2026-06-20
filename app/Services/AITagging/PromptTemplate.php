@@ -48,13 +48,16 @@ TEXT;
      *                                       re-tagging older links so the model reuses
      *                                       tags created after those links were first tagged.
      * @param bool $existingOnly When true, the model must choose only from $vocabulary.
+     * @param int|null $maxTags When set, the model must pick at most this many tags per link.
      */
-    public function systemPromptForApi(array $vocabulary = [], bool $existingOnly = false): string
+    public function systemPromptForApi(array $vocabulary = [], bool $existingOnly = false, ?int $maxTags = null): string
     {
+        $count = ($maxTags !== null && $maxTags > 0) ? "at most {$maxTags}" : '3–8';
+
         $prompt = <<<TEXT
 You are helping tag bookmarks/links. The user message is a JSON array of links.
 
-For each link, suggest 3–8 relevant tags.
+For each link, suggest {$count} relevant tags.
 - Each link includes a `current_tags` array. Treat those as the preferred vocabulary:
   reuse them where they still apply, and only add missing tags.
 - Prefer specific tags ("laravel" over "php", "orm" over "database" when applicable).
@@ -72,6 +75,10 @@ TEXT;
                 $prompt .= "\n\nExisting tag vocabulary (strongly prefer reusing these exact tags before "
                     . "introducing anything new):\n" . $list;
             }
+        }
+
+        if ($maxTags !== null && $maxTags > 0) {
+            $prompt .= "\n\nHard limit: choose NO MORE THAN {$maxTags} tag(s) per link — the most important ones only.";
         }
 
         $prompt .= <<<TEXT

@@ -45,11 +45,13 @@ class Tag extends Model implements Auditable
         'user_id',
         'name',
         'visibility',
+        'is_canonical',
     ];
 
     protected $casts = [
         'user_id' => 'integer',
         'visibility' => 'integer',
+        'is_canonical' => 'boolean',
     ];
 
     public static array $allowOrderBy = [
@@ -95,5 +97,15 @@ class Tag extends Model implements Auditable
     public function links(): BelongsToMany
     {
         return $this->belongsToMany(Link::class, 'link_tags', 'tag_id', 'link_id');
+    }
+
+    /*
+     * ========================================================================
+     * SCOPES
+     */
+
+    public function scopeCanonical(Builder $query): Builder
+    {
+        return $query->where('is_canonical', true);
     }
 }

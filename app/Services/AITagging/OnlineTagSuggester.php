@@ -31,12 +31,14 @@ class OnlineTagSuggester
      * @param Collection<int,Link> $links
      * @param array<int,string> $vocabulary Existing tag names to prefer/reuse (for re-tagging).
      * @param bool $existingOnly When true, restrict suggestions to $vocabulary only.
+     * @param int|null $maxTags When set, instruct the model to pick at most this many tags per link.
      */
     public function suggestForLinks(
         Collection $links,
         ?string $model = null,
         array $vocabulary = [],
         bool $existingOnly = false,
+        ?int $maxTags = null,
     ): ?string {
         if ($links->isEmpty()) {
             return null;
@@ -52,7 +54,7 @@ class OnlineTagSuggester
         ])->values()->all();
 
         $messages = [
-            ['role' => 'system', 'content' => $this->prompt->systemPromptForApi($vocabulary, $existingOnly)],
+            ['role' => 'system', 'content' => $this->prompt->systemPromptForApi($vocabulary, $existingOnly, $maxTags)],
             ['role' => 'user', 'content' => json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '[]'],
         ];
 

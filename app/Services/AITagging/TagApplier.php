@@ -29,6 +29,13 @@ class TagApplier
         $dryRun = (bool) ($options['dry_run'] ?? false);
         $createTags = (bool) ($options['create_tags'] ?? true);
         $skipExisting = (bool) ($options['skip_existing'] ?? false);
+        $maxTags = isset($options['max_tags']) ? (int) $options['max_tags'] : null;
+        // When non-empty, only tags whose lowercased name is in this set may be applied
+        // (hard enforcement of a restricted vocabulary — LLMs don't reliably obey "only from list").
+        $allowed = [];
+        foreach (($options['allowed_tags'] ?? []) as $name) {
+            $allowed[mb_strtolower(trim((string) $name))] = true;
+        }
 
         $say = $log ?? static fn(string $level, string $message) => null;
 
@@ -64,6 +71,26 @@ class TagApplier
             if (empty($tagNames)) {
                 $say('warn', 'Skipping link #' . $link->id . ': no valid tags.');
                 continue;
+            }
+
+            // Preserve the full (untruncated, unfiltered) suggestion as the raw layer.
+            $rawTags = $tagNames;
+
+            // Hard-restrict to the allowed vocabulary (e.g. canonical tags) when provided.
+            if (!empty($allowed)) {
+                $tagNames = array_values(array_filter(
+                    $tagNames,
+                    fn(string $name) => isset($allowed[mb_strtolower($name)]),
+                ));
+                if (empty($tagNames)) {
+                    $say('warn', 'Skipping link #' . $link->id . ': no suggested tags within the allowed vocabulary.');
+                    continue;
+                }
+            }
+
+            // Enforce the per-link tag cap as a safety net (the model is also instructed to obey it).
+            if ($maxTags !== null && $maxTags > 0) {
+                $tagNames = array_slice($tagNames, 0, $maxTags);
             }
 
             $tagIds = [];
@@ -120,10 +147,13 @@ class TagApplier
                 $link->tags()->syncWithoutDetaching($tagIds);
             }
 
-            // Mark the link as AI-tagged without firing audits/events or bumping updated_at,
-            // so incremental re-runs can skip links already processed. toBase() bypasses
-            // Eloquent's automatic timestamp handling and model events.
-            Link::whereKey($link->id)->toBase()->update(['ai_tagged_at' => now()]);
+            // Mark the link as AI-tagged and store the full raw suggestion (re-derivable layer)
+            // without firing audits/events or bumping updated_at, so incremental re-runs can skip
+            // processed links. toBase() bypasses Eloquent's timestamp handling and model events.
+            Link::whereKey($link->id)->toBase()->update([
+                'ai_tagged_at' => now(),
+                'raw_tags' => json_encode($rawTags, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            ]);
 
             $stats['links_updated']++;
         }

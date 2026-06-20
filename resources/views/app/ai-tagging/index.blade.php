@@ -115,7 +115,7 @@
                             <div class="form-text">Max 200 links per run.</div>
                         </div>
 
-                        <div class="col-12 col-md-4">
+                        <div class="col-12 col-md-3">
                             <label for="auto_apply_behavior" class="form-label">Apply behavior</label>
                             <select name="apply_behavior" id="auto_apply_behavior" class="form-select">
                                 <option value="merge">Merge with existing tags</option>
@@ -123,7 +123,48 @@
                             </select>
                         </div>
 
-                        <div class="col-12 col-md-5">
+                        <div class="col-12 col-md-3">
+                            <label for="auto_vocabulary" class="form-label">Tag vocabulary</label>
+                            <select name="vocabulary" id="auto_vocabulary" class="form-select">
+                                <option value="none">Free (any tags)</option>
+                                <option value="all">Prefer my existing tags</option>
+                                <option value="canonical">Canonical tags only ({{ $canonicalCount }})</option>
+                            </select>
+                            <div class="form-text">
+                                Canonical = your small browsing list. Re-tagging? Use "prefer" or "canonical".
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-md-3">
+                            <label for="auto_max_tags" class="form-label">Max tags / link</label>
+                            <input type="number" min="1" max="20" name="max_tags" id="auto_max_tags" class="form-control"
+                                placeholder="canonical: 3">
+                        </div>
+                    </div>
+
+                    <div class="row g-3 align-items-end mt-1">
+                        <div class="col-6 col-md-3">
+                            <label for="auto_from_id" class="form-label">From ID</label>
+                            <input type="number" min="1" name="from_id" id="auto_from_id" class="form-control"
+                                placeholder="optional">
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label for="auto_to_id" class="form-label">To ID</label>
+                            <input type="number" min="1" name="to_id" id="auto_to_id" class="form-control"
+                                placeholder="optional">
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label for="auto_created_after" class="form-label">Created after</label>
+                            <input type="date" name="created_after" id="auto_created_after" class="form-control">
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label for="auto_created_before" class="form-label">Created before</label>
+                            <input type="date" name="created_before" id="auto_created_before" class="form-control">
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mt-1">
+                        <div class="col-12 col-md-6">
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox" name="untagged_only" id="auto_untagged_only"
                                     value="1" checked>
@@ -138,6 +179,15 @@
                                     Exclude broken links
                                 </label>
                             </div>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="skip_ai_tagged" id="auto_skip_ai_tagged"
+                                    value="1">
+                                <label class="form-check-label" for="auto_skip_ai_tagged">
+                                    Skip links already AI-tagged (incremental)
+                                </label>
+                            </div>
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox" name="skip_existing" id="auto_skip_existing"
                                     value="1">
@@ -149,7 +199,7 @@
                                 <input class="form-check-input" type="checkbox" name="create_tags" id="auto_create_tags"
                                     value="1" checked>
                                 <label class="form-check-label" for="auto_create_tags">
-                                    Auto-create new tags
+                                    Auto-create new tags (ignored for canonical)
                                 </label>
                             </div>
                         </div>
