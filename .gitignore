@@ -1,8 +1,8 @@
 /node_modules
 /logs
 /public/hot
+/public/build
 /public/storage
-/public/mix-manifest.json
 /storage/*.key
 /tests/Controller/logs
 /vendor

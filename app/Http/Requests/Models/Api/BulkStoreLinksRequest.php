@@ -11,7 +11,7 @@ class BulkStoreLinksRequest extends FormRequest
         return [
             'models' => ['array', 'required'],
             'models.*.user_id' => ['nullable', 'exists:users'],
-            'models.*.url' => ['required'],
+            'models.*.url' => ['required', 'url'],
             'models.*.title' => ['nullable'],
             'models.*.description' => ['nullable'],
             'models.*.icon' => ['nullable'],

@@ -60,6 +60,8 @@ class LinkController extends Controller
 
     public function update(LinkUpdateRequest $request, ApiLink $link): JsonResponse
     {
+        $this->authorize('update', $link);
+
         $updatedLink = LinkRepository::update($link, $request->all());
 
         return response()->json($updatedLink);

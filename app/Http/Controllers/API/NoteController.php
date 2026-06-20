@@ -26,6 +26,8 @@ class NoteController extends Controller
 
     public function update(NoteUpdateRequest $request, ApiNote $note): JsonResponse
     {
+        $this->authorize('update', $note);
+
         $updatedNote = NoteRepository::update($note, $request->validated());
 
         return response()->json($updatedNote);

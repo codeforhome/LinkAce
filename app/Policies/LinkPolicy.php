@@ -28,7 +28,7 @@ class LinkPolicy
 
     public function update(User $user, Link $link): bool
     {
-        return $this->userCanAccessLink($user, $link);
+        return $link->user->is($user);
     }
 
     public function delete(User $user, Link $link): bool

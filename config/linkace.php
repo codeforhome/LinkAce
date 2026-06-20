@@ -7,6 +7,11 @@ return [
         'cache_duration' => 3600, // 60 minutes
     ],
 
+    'link_checks' => [
+        // Number of weeks between re-checks of broken links
+        'broken_recheck_interval_weeks' => (int) env('BROKEN_LINK_RECHECK_INTERVAL_WEEKS', 2),
+    ],
+
     'listitem_count_values' => [
         12,
         24,

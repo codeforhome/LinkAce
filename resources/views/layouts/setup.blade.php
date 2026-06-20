@@ -13,7 +13,7 @@
 
     <title>@isset($pageTitle){{$pageTitle}} - @endisset{{ config('app.name', 'LinkAce') }}</title>
 
-    <link href="{{ mix('assets/dist/css/app.css') }}" rel="stylesheet">
+    <link href="{{ Vite::asset('resources/assets/sass/app.scss') }}" rel="stylesheet">
 </head>
 <body class="setup">
 <div id="app">
@@ -26,8 +26,7 @@
         @yield('content')
     </main>
 
-    <script src="{{ mix('assets/dist/js/dependencies.js') }}"></script>
-    <script src="{{ mix('assets/dist/js/app.js') }}"></script>
+    @vite('resources/assets/js/app.js')
     @stack('scripts')
 
 </div>

@@ -197,7 +197,7 @@ class TagControllerTest extends TestCase
         $this->createTestTags();
 
         $this->get('tags/1/edit')->assertOk()->assertSee('Public Tag');
-        $this->get('tags/2/edit')->assertOk()->assertSee('Internal Tag');
+        $this->get('tags/2/edit')->assertForbidden();
         $this->get('tags/3/edit')->assertForbidden();
     }
 
@@ -224,13 +224,16 @@ class TagControllerTest extends TestCase
             'tag_id' => 2,
             'name' => 'New Internal Tag',
             'visibility' => 1,
-        ])->assertRedirect('tags/2');
+        ])->assertForbidden();
 
         $this->patch('tags/3', [
             'tag_id' => 3,
             'name' => 'New Private Tag',
             'visibility' => 1,
         ])->assertForbidden();
+
+        $this->assertEquals('Internal Tag', Tag::find(2)->name);
+        $this->assertEquals('Private Tag', Tag::find(3)->name);
     }
 
     public function test_missing_model_error_for_update(): void

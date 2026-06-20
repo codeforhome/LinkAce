@@ -7,7 +7,7 @@
 
     <title>{{ config('app.name', 'LinkAce') }}</title>
 
-    <link href="{{ mix('assets/dist/css/app.css') }}" rel="stylesheet">
+    <link href="{{ Vite::asset('resources/assets/sass/app.scss') }}" rel="stylesheet">
 
     @include('layouts.partials.favicon')
 </head>

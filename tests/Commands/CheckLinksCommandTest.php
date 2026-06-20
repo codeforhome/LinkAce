@@ -89,6 +89,44 @@ class CheckLinksCommandTest extends TestCase
         );
     }
 
+    public function test_check_skips_private_ip_links(): void
+    {
+        Http::fake();
+        Notification::fake();
+
+        $user = User::factory()->create();
+        Link::factory()->for($user)->create(['url' => 'http://192.168.1.1/']);
+        Link::factory()->for($user)->create(['url' => 'http://127.0.0.1/']);
+        Link::factory()->for($user)->create(['url' => 'http://169.254.169.254/latest/meta-data/']);
+        Link::factory()->for($user)->create(['url' => 'http://[::1]/']);
+
+        config(['html-meta.block_private_ips' => true]);
+
+        $this->artisan('links:check --noWait');
+
+        Http::assertNothingSent();
+        Notification::assertNothingSent();
+
+        // Status and last_checked_at should remain untouched
+        $this->assertDatabaseMissing('links', ['status' => Link::STATUS_BROKEN]);
+        $this->assertDatabaseMissing('links', ['last_checked_at' => now()]);
+    }
+
+    public function test_check_allows_private_ip_links_when_config_disabled(): void
+    {
+        Http::fake(['*' => Http::response()]);
+        Notification::fake();
+
+        $user = User::factory()->create();
+        Link::factory()->for($user)->create(['url' => 'http://192.168.1.1/']);
+
+        config(['html-meta.block_private_ips' => false]);
+
+        $this->artisan('links:check --noWait');
+
+        Http::assertSentCount(1);
+    }
+
     public function test_check_without_links(): void
     {
         Notification::fake();
@@ -138,5 +176,57 @@ class CheckLinksCommandTest extends TestCase
             LinkCheckNotification::class,
             fn (LinkCheckNotification $notification) => count($notification->brokenLinks) === 5
         );
+    }
+
+    public function test_broken_link_is_rechecked_after_two_weeks(): void
+    {
+        Http::fake(['*' => Http::response()]);
+        Notification::fake();
+
+        $user = User::factory()->create();
+        Link::factory()->for($user)->create([
+            'status' => Link::STATUS_BROKEN,
+            'last_checked_at' => now()->subWeeks(3),
+        ]);
+
+        $this->artisan('links:check --noWait');
+
+        $this->assertDatabaseHas('links', ['status' => Link::STATUS_OK]);
+    }
+
+    public function test_broken_link_is_not_rechecked_before_two_weeks(): void
+    {
+        Http::fake(['*' => Http::response()]);
+        Notification::fake();
+
+        $user = User::factory()->create();
+        Link::factory()->for($user)->create([
+            'status' => Link::STATUS_BROKEN,
+            'last_checked_at' => now()->subWeek(),
+        ]);
+
+        $this->artisan('links:check --noWait');
+
+        // Link was checked too recently — should remain broken (not re-checked)
+        $this->assertDatabaseHas('links', ['status' => Link::STATUS_BROKEN]);
+    }
+
+    public function test_broken_link_recheck_interval_is_configurable(): void
+    {
+        Http::fake(['*' => Http::response()]);
+        Notification::fake();
+
+        config(['linkace.link_checks.broken_recheck_interval_weeks' => 4]);
+
+        $user = User::factory()->create();
+        Link::factory()->for($user)->create([
+            'status' => Link::STATUS_BROKEN,
+            'last_checked_at' => now()->subWeeks(3),
+        ]);
+
+        $this->artisan('links:check --noWait');
+
+        // 3 weeks old but interval is 4 — should NOT be re-checked yet
+        $this->assertDatabaseHas('links', ['status' => Link::STATUS_BROKEN]);
     }
 }

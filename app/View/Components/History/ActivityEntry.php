@@ -33,7 +33,7 @@ class ActivityEntry extends Component
         if ($this->activity->causer() !== null) {
             $this->changes[] = trans('audit.activity_entry_with_causer', [
                 'change' => $change,
-                'causer' => $this->activity->causer?->name ?: trans('user.unknown_user'),
+                'causer' => htmlspecialchars($this->activity->causer?->name ?: trans('user.unknown_user')),
             ]);
             return;
         }

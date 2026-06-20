@@ -21,12 +21,12 @@ jobs:
       - name: Try to build the assets
         run: |
           npm ci
-          npm run production
+          npm run build
           rm -rf node_modules
 
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: 8.1
+          php-version: 8.2
           extensions: mbstring
 
       - id: composer-cache
@@ -60,10 +60,11 @@ jobs:
           filename: linkace.zip
           exclusions: '*.git*'
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: linkace-package
           retention-days: 7
+          include-hidden-files: true
           path: linkace.zip
 
   build-package-docker:
@@ -78,10 +79,11 @@ jobs:
           chmod 0666 .env
           mv docker-compose.production.yml docker-compose.yml
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: linkace-docker
           retention-days: 7
+          include-hidden-files: true
           path: |
             docker-compose.yml
             .env

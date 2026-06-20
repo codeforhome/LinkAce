@@ -28,7 +28,7 @@ class TagPolicy
 
     public function update(User $user, Tag $tag): bool
     {
-        return $this->userCanAccessTag($user, $tag);
+        return $tag->user->is($user);
     }
 
     public function delete(User $user, Tag $tag): bool

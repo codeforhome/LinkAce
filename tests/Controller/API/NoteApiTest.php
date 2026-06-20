@@ -59,10 +59,17 @@ class NoteApiTest extends ApiTestCase
 
     public function test_update_request(): void
     {
-        $this->createTestLinks();
+        $testData = $this->createTestLinks();
+        $otherUser = $testData[3];
         Note::factory()->create(['link_id' => 1]);
-        Note::factory()->create(['link_id' => 2]); // Note for internal link of other user
-        Note::factory()->create(['link_id' => 3]); // Note for private link of other user
+        Note::factory()->for($otherUser)->create([
+            'link_id' => 2,
+            'note' => 'Internal Note',
+        ]); // Note for internal link of other user
+        Note::factory()->for($otherUser)->create([
+            'link_id' => 3,
+            'note' => 'Private Note',
+        ]); // Note for private link of other user
 
         $this->patchJsonAuthorized('api/v2/notes/1', [
             'note' => 'Gallia est omnis divisa in partes tres, quarum.',
@@ -80,16 +87,15 @@ class NoteApiTest extends ApiTestCase
         $this->patchJsonAuthorized('api/v2/notes/2', [
             'note' => 'Gallia est omnis divisa in partes tres, quarum.',
             'visibility' => 1,
-        ])
-            ->assertOk()
-            ->assertJson([
-                'note' => 'Gallia est omnis divisa in partes tres, quarum.',
-            ]);
+        ])->assertForbidden();
 
         $this->patchJsonAuthorized('api/v2/notes/3', [
             'note' => 'Gallia est omnis divisa in partes tres, quarum.',
             'visibility' => 1,
         ])->assertForbidden();
+
+        $this->assertEquals('Internal Note', Note::find(2)->note);
+        $this->assertEquals('Private Note', Note::find(3)->note);
     }
 
     public function test_invalid_update_request(): void

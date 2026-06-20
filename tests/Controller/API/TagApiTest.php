@@ -124,17 +124,16 @@ class TagApiTest extends ApiTestCase
         $this->patchJsonAuthorized('api/v2/tags/2', [
             'name' => 'Updated Internal Tag',
             'visibility' => 1,
-        ])
-            ->assertOk()
-            ->assertJson([
-                'name' => 'Updated Internal Tag',
-            ]);
+        ])->assertForbidden();
 
         $this->patchJsonAuthorized('api/v2/tags/3', [
             'name' => 'Updated Private Tag',
             'visibility' => 1,
         ])
             ->assertForbidden();
+
+        $this->assertEquals('Internal Tag', Tag::find(2)->name);
+        $this->assertEquals('Private Tag', Tag::find(3)->name);
     }
 
     public function test_invalid_update_request(): void

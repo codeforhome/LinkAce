@@ -18,6 +18,7 @@ class SetupDatabaseRequest extends FormRequest
             ],
             'db_host' => [
                 'required_unless:connection,sqlite',
+                'not_regex:/[\r\n]/',
             ],
             'db_port' => [
                 'required_unless:connection,sqlite',
@@ -25,12 +26,15 @@ class SetupDatabaseRequest extends FormRequest
             ],
             'db_name' => [
                 'required_unless:connection,sqlite',
+                'not_regex:/[\r\n]/',
             ],
             'db_user' => [
                 'required_unless:connection,sqlite',
+                'not_regex:/[\r\n]/',
             ],
             'db_password' => [
                 'nullable',
+                'not_regex:/[\r\n]/',
             ],
         ];
     }

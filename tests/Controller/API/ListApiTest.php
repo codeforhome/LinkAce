@@ -125,17 +125,16 @@ class ListApiTest extends ApiTestCase
             'name' => 'Updated Internal List',
             'description' => 'Custom Description',
             'visibility' => 1,
-        ])
-            ->assertOk()
-            ->assertJson([
-                'name' => 'Updated Internal List',
-            ]);
+        ])->assertForbidden();
 
         $this->patchJsonAuthorized('api/v2/lists/3', [
             'name' => 'Updated Internal List',
             'description' => 'Custom Description',
             'visibility' => 1,
         ])->assertForbidden();
+
+        $this->assertEquals('Internal List', LinkList::find(2)->name);
+        $this->assertEquals('Private List', LinkList::find(3)->name);
     }
 
     public function test_invalid_update_request(): void

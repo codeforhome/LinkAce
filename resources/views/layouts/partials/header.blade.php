@@ -10,8 +10,7 @@
 
 @include('partials.configure-darkmode')
 
-<script defer src="{{ mix('assets/dist/js/dependencies.js') }}"></script>
-<script defer src="{{ mix('assets/dist/js/app.js') }}"></script>
+@vite('resources/assets/js/app.js')
 
 <meta property="la-app-data" content="{{ json_encode([
     'user' => [

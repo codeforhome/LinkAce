@@ -23,19 +23,13 @@ jobs:
       - name: Try to build the assets
         run: |
           npm ci
-          npm run production
+          npm run build
 
       - name: Upload built assets
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
-          name: assets
-          path: public/assets/dist
-
-      - name: Upload mix manifest
-        uses: actions/upload-artifact@v6
-        with:
-          name: mix-manifest
-          path: public/mix-manifest.json
+          name: vite-build
+          path: public/build
 
   test-php:
     name: PHP ${{ matrix.php-versions }} Test on ${{ matrix.operating-system }}
@@ -45,20 +39,15 @@ jobs:
     strategy:
       matrix:
         operating-system: [ ubuntu-latest ]
-        php-versions: [ '8.1', '8.2', '8.3', '8.4', '8.5' ]
+        php-versions: [ '8.2', '8.3', '8.4', '8.5' ]
 
     steps:
       - uses: actions/checkout@v6
 
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
-          name: assets
-          path: public/assets/dist
-
-      - uses: actions/download-artifact@v7
-        with:
-          name: mix-manifest
-          path: public
+          name: vite-build
+          path: public/build
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -101,7 +90,7 @@ jobs:
 
       - name: Upload Laravel logs on failure
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: logs-test-php-${{ matrix.php-versions }}
           path: storage/logs/**

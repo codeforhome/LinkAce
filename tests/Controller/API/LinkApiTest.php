@@ -436,7 +436,7 @@ class LinkApiTest extends ApiTestCase
             'lists' => [$list->id],
             'is_private' => false,
             'check_disabled' => false,
-        ])->assertOk()->assertJson(['url' => 'https://new-internal-link.com']);
+        ])->assertForbidden();
 
         $this->patchJsonAuthorized('api/v2/links/3', [
             'url' => 'https://new-internal-link.com',
@@ -446,6 +446,9 @@ class LinkApiTest extends ApiTestCase
             'is_private' => false,
             'check_disabled' => false,
         ])->assertForbidden();
+
+        $this->assertEquals('https://internal-link.com', Link::find(2)->url);
+        $this->assertEquals('https://private-link.com', Link::find(3)->url);
     }
 
     public function test_update_request_with_system_token(): void
