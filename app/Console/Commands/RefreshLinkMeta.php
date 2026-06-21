@@ -128,7 +128,7 @@ class RefreshLinkMeta extends Command
             // Throttle outgoing requests, but only when we actually hit the network (a refresh
             // attempt) and not during dry runs.
             if (!$dryRun && !$this->option('no-wait') && $result['reason'] !== 'current_ok') {
-                Sleep::for(1);
+                Sleep::sleep(1);
             }
         }
     }

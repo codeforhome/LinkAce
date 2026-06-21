@@ -6,6 +6,7 @@ use App\Models\Link;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Sleep;
 use Tests\TestCase;
 
 class RefreshLinkMetaCommandTest extends TestCase
@@ -97,6 +98,24 @@ class RefreshLinkMetaCommandTest extends TestCase
 
         $this->assertDatabaseHas('links', ['id' => $tweet->id, 'title' => 'Tweet Title']);
         $this->assertDatabaseHas('links', ['id' => $netflix->id, 'title' => 'netflix.com']); // untouched
+    }
+
+    public function test_throttles_between_refreshes_without_no_wait(): void
+    {
+        Sleep::fake(); // also asserts no real sleep happens, and guards the duration-unit bug
+        Http::fake(['example.com/*' => Http::response($this->goodHtml())]);
+        $user = User::factory()->create();
+        Link::factory()->for($user)->count(2)->create([
+            'url' => 'https://example.com/page',
+            'title' => 'example.com',
+            'description' => null,
+        ]);
+
+        // No --no-wait: the throttle path runs and must not throw "Unknown duration unit".
+        $this->artisan('links:refresh-meta', ['--user-email' => $user->email])->assertExitCode(0);
+
+        // Two links refreshed → throttled twice; mainly this guards against the duration-unit crash.
+        Sleep::assertSleptTimes(2);
     }
 
     public function test_does_not_overwrite_with_fresh_junk(): void
