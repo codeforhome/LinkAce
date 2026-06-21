@@ -149,28 +149,50 @@ class HtmlMeta
 
     /**
      * Whether the resolved meta is too weak to be useful, which is the signal to try a general
-     * reader fallback. Weak means the title is unusable (empty, the bare host, or a bot-wall
-     * phrase) AND the description is missing or itself a bot-wall message.
+     * reader fallback.
      */
     protected function isWeakMeta(): bool
     {
-        $title = trim((string) ($this->meta['title'] ?? ''));
         $description = (string) ($this->meta['description']
             ?? $this->meta['og:description']
             ?? $this->meta['twitter:description']
             ?? '');
 
-        $host = parse_url($this->url, PHP_URL_HOST) ?: '';
-        $hostNoWww = preg_replace('/^www\./', '', $host) ?? $host;
+        return $this->looksWeak($this->url, $this->meta['title'] ?? '', $description);
+    }
 
-        $titleIsWeak = $title === ''
-            || $title === $host
-            || $title === $hostNoWww
-            || $this->containsJunk($title);
-
+    /**
+     * Whether a (url, title, description) triple is too weak to be useful: the title is unusable
+     * (empty, the bare host, a bot-wall phrase, or a legacy social placeholder like "@user on X")
+     * AND the description is missing or itself a bot-wall message.
+     *
+     * Public so callers can judge an *existing* stored link (e.g. the metadata-refresh command).
+     */
+    public function looksWeak(string $url, ?string $title, ?string $description): bool
+    {
+        $description = trim((string) $description);
         $descriptionIsWeak = $description === '' || $this->containsJunk($description);
 
-        return $titleIsWeak && $descriptionIsWeak;
+        return $this->titleLooksWeak($url, $title) && $descriptionIsWeak;
+    }
+
+    /**
+     * Whether a title alone is unusable: empty, the bare host, a bot-wall phrase, or a legacy
+     * social placeholder ("@user on X"). Used as the refresh gate, where a bad title warrants a
+     * re-fetch even if a (possibly stale) description is present.
+     */
+    public function titleLooksWeak(string $url, ?string $title): bool
+    {
+        $title = trim((string) $title);
+
+        $host = parse_url($url, PHP_URL_HOST) ?: '';
+        $hostNoWww = preg_replace('/^www\./', '', $host) ?? $host;
+
+        return $title === ''
+            || $title === $host
+            || $title === $hostNoWww
+            || $this->containsJunk($title)
+            || $this->isLegacyPlaceholderTitle($title);
     }
 
     protected function containsJunk(string $text): bool
@@ -184,6 +206,18 @@ class HtmlMeta
         }
 
         return false;
+    }
+
+    /**
+     * Placeholder titles produced by the older Twitter/X handling, before the provider chain
+     * (e.g. "@username on X", "Post on X", "X (formerly Twitter)").
+     */
+    protected function isLegacyPlaceholderTitle(string $title): bool
+    {
+        $title = mb_strtolower(trim($title));
+
+        return $title !== ''
+            && (preg_match('/ on x$/', $title) === 1 || str_contains($title, '(formerly twitter)'));
     }
 
     /**

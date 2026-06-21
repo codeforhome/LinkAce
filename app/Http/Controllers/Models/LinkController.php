@@ -12,6 +12,7 @@ use App\Models\Link;
 use App\Models\LinkList;
 use App\Models\Tag;
 use App\Repositories\LinkRepository;
+use App\Services\Metadata\LinkMetaRefresher;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -183,6 +184,22 @@ class LinkController extends Controller
 
         $link->status = Link::STATUS_OK;
         $link->save();
+
+        return redirect()->route('links.show', ['link' => $link]);
+    }
+
+    public function refreshMeta(Link $link): RedirectResponse
+    {
+        $this->authorize('update', $link);
+
+        // Explicit per-link action: force a refresh regardless of the current title quality.
+        $result = app(LinkMetaRefresher::class)->refresh($link, force: true);
+
+        if ($result['changed']) {
+            flash(trans('link.metadata_refreshed'), 'success');
+        } else {
+            flash(trans('link.metadata_refresh_none'), 'warning');
+        }
 
         return redirect()->route('links.show', ['link' => $link]);
     }

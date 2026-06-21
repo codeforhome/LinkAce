@@ -120,6 +120,8 @@ Route::group(['middleware' => ['auth']], function () {
         ->name('links.toggle-check');
     Route::post('links/mark-working/{link}', [LinkController::class, 'markWorking'])
         ->name('links.mark-working');
+    Route::post('links/refresh-meta/{link}', [LinkController::class, 'refreshMeta'])
+        ->name('links.refresh-meta');
 
     Route::get('search', [SearchController::class, 'getSearch'])
         ->name('get-search');

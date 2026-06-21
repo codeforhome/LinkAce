@@ -104,5 +104,14 @@
             </form>
         @endif
 
+        <form action="{{ route('links.refresh-meta', [$link->id]) }}" method="POST"
+            class="mt-2 d-flex align-items-center">
+            @csrf
+            <small class="me-3">@lang('link.metadata_refresh')</small>
+            <button type="submit" class="btn btn-xs btn-outline-secondary ms-auto">
+                @lang('link.metadata_refresh')
+            </button>
+        </form>
+
     </div>
 </div>

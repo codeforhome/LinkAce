@@ -422,6 +422,24 @@ class HtmlMetaHelperTest extends TestCase
     }
 
     /*
+     * looksWeak() is the public weak/placeholder detector used by the metadata-refresh feature.
+     */
+    public function test_looks_weak_detects_placeholders_and_passes_good_meta(): void
+    {
+        $meta = new HtmlMeta();
+
+        // Legacy social placeholders + hostname + empty → weak.
+        $this->assertTrue($meta->looksWeak('https://x.com/jack/status/20', '@jack on X', null));
+        $this->assertTrue($meta->looksWeak('https://x.com/foo', 'X (formerly Twitter)', ''));
+        $this->assertTrue($meta->looksWeak('https://example.com/', 'example.com', null));
+        $this->assertTrue($meta->looksWeak('https://example.com/', '', ''));
+
+        // Real metadata → not weak.
+        $this->assertFalse($meta->looksWeak('https://x.com/jack/status/20', 'jack (@jack)', 'just setting up my twttr'));
+        $this->assertFalse($meta->looksWeak('https://example.com/', 'A Real Article Title', null));
+    }
+
+    /*
      * Jina must NOT be consulted for disallowed (private/loopback) hosts — that would leak an
      * internal URL to a third-party service.
      */

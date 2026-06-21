@@ -56,6 +56,10 @@ return [
     'status_is_broken' => 'Link is marked as broken',
     'status_mark_working' => 'Mark as working',
 
+    'metadata_refresh' => 'Refresh metadata',
+    'metadata_refreshed' => 'Metadata refreshed from the page.',
+    'metadata_refresh_none' => 'No better metadata could be found for this link.',
+
     'bulk_title' => 'You want to edit :count Link.|You want to edit :count Links.',
     'bulk_edit_add' => 'Add Link to bulk edit',
     'bulk_edit_success' => 'Successfully updated :success Links out of :selected selected ones.',
