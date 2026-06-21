@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 
 trait ScopesVisibility
 {
-    public function scopeVisibleForUser(Builder $query, int $userId = null, bool $privateSystemAccess = false): Builder
+    public function scopeVisibleForUser(Builder $query, ?int $userId = null, bool $privateSystemAccess = false): Builder
     {
         if (is_null($userId) && auth()->check()) {
             $userId = auth()->id();

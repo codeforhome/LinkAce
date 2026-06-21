@@ -14,7 +14,7 @@ trait ScopesForUser
      * @param int|null $userId
      * @return Builder
      */
-    public function scopeByUser(Builder $query, int $userId = null): Builder
+    public function scopeByUser(Builder $query, ?int $userId = null): Builder
     {
         if (is_null($userId) && auth()->check()) {
             $userId = auth()->id();
